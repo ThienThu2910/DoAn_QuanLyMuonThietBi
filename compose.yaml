@@ -1,0 +1,63 @@
+services:
+  app:
+    build: .
+    container_name: thietbi_web_app
+    ports:
+      - "8080:80"
+    volumes:
+      - ./src:/var/www/html
+    environment:
+      - DB_HOST=database
+      - DB_NAME=ql_thietbi
+      - DB_USER=root
+      - DB_PASS=rootpassword
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin123
+      - MINIO_BUCKET=project-files
+    depends_on:
+      - database
+      - minio
+    networks:
+      - cloud_network
+
+  database:
+    image: mysql:8.0
+    container_name: thietbi_mysql_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: ql_thietbi
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - cloud_network
+
+  minio:
+    image: elestio/minio:latest
+    container_name: thietbi_minio_storage
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - cloud_network
+
+volumes:
+  db_data:
+    name: thietbi_db_data
+  minio_data:
+    name: thietbi_minio_data
+
+networks:
+  cloud_network:
+    name: thietbi_cloud_net

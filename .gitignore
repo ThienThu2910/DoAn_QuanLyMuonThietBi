@@ -1,0 +1,17 @@
+# Tệp môi trường nhạy cảm
+.env
+
+# Cấu hình IDE / Editor
+.vscode/
+.idea/
+*.suo
+*.user
+
+# File hệ điều hành
+Thumbs.db
+.DS_Store
+
+# File nén backup
+*.zip
+*.rar
+*.tar.gz
