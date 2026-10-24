@@ -71,6 +71,7 @@ $users = $pdo->query("SELECT * FROM users ORDER BY id DESC")->fetchAll();
         th { font-size: 0.8rem; text-transform: uppercase; color: #64748B; font-weight: 700; }
         .btn-sm { padding: 5px 12px; border-radius: 999px; text-decoration: none; font-size: 0.78rem; font-weight: 700; display: inline-block; margin-right: 4px; }
     </style>
+    <link rel="stylesheet" href="/assets/theme.css?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.css') ?>"><script src="/assets/theme.js?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.js') ?>"></script>
 </head>
 <body>
 
