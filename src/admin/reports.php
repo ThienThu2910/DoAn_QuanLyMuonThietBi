@@ -47,6 +47,7 @@ $topStudents = $pdo->query("
         th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid rgba(206, 213, 224, 0.6); }
         th { font-size: 0.8rem; text-transform: uppercase; color: #64748B; font-weight: 700; }
     </style>
+    <link rel="stylesheet" href="/assets/theme.css?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.css') ?>"><script src="/assets/theme.js?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.js') ?>"></script>
 </head>
 <body>
 

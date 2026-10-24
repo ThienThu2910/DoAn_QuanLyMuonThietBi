@@ -120,6 +120,7 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
         
         .alert { padding: 12px 20px; border-radius: 14px; margin-bottom: 20px; font-weight: 600; font-size: 0.9rem; }
     </style>
+    <link rel="stylesheet" href="/assets/theme.css?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.css') ?>"><script src="/assets/theme.js?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.js') ?>"></script>
 </head>
 <body>
 

@@ -559,6 +559,7 @@ $devices = $stmt->fetchAll();
             .footer-glass-bar { border-radius: 20px; flex-direction: column; text-align: center; }
         }
     </style>
+    <link rel="stylesheet" href="/assets/theme.css?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.css') ?>"><script src="/assets/theme.js?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.js') ?>"></script>
 </head>
 <body>
 

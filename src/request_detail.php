@@ -121,6 +121,7 @@ $diffDays = (int)$today->diff($dueDate)->format("%r%a");
             .grid-layout { grid-template-columns: 1fr; }
         }
     </style>
+    <link rel="stylesheet" href="/assets/theme.css?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.css') ?>"><script src="/assets/theme.js?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.js') ?>"></script>
 </head>
 <body>
 

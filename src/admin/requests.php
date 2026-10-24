@@ -131,6 +131,7 @@ $today = new DateTime('today');
         .status-returned { background: #E2E8F0; color: #334155; }
         .btn-action { padding: 6px 14px; border-radius: 999px; border: none; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease; }
     </style>
+    <link rel="stylesheet" href="/assets/theme.css?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.css') ?>"><script src="/assets/theme.js?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.js') ?>"></script>
 </head>
 <body>
 
