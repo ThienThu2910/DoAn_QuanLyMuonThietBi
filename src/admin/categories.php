@@ -73,7 +73,7 @@ $categories = $pdo->query("SELECT c.*, COUNT(d.id) as device_count FROM categori
         .btn-delete:hover { background: #DC2626; color: #fff; }
         .alert { padding: 12px 20px; border-radius: 14px; margin-bottom: 20px; font-weight: 600; font-size: 0.9rem; }
     </style>
-    <link rel="stylesheet" href="/assets/theme.css?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.css') ?>"><script src="/assets/theme.js?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.js') ?>"></script>
+    <?php include __DIR__ . '/../head.php'; ?>
 </head>
 <body>
 

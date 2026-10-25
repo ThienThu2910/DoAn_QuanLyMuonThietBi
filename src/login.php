@@ -23,43 +23,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
+<?php require_once __DIR__ . '/ui.php'; ?>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Đăng nhập - Quản lý Thiết bị</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="/assets/theme.css?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.css') ?>"><script src="/assets/theme.js?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.js') ?>"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#F5F8F6">
+    <title>Đăng nhập • Alt F4 Hub</title>
+    <?php include __DIR__ . '/head.php'; ?>
+    <link rel="stylesheet" href="/assets/loader.css?v=<?= @filemtime(__DIR__ . '/assets/loader.css') ?>">
 </head>
-<body class="bg-light d-flex align-items-center vh-100">
-<div class="container" style="max-width: 420px;">
-    <div class="card shadow border-0">
-        <div class="card-body p-4">
-            <h4 class="card-title text-center text-primary mb-4 fw-bold">ĐĂNG NHẬP</h4>
+<body class="auth-body">
+<?php if ($_SERVER['REQUEST_METHOD'] !== 'POST') { include __DIR__ . '/loader.php'; }   // loading ~3 giây trước khi vào đăng nhập (không hiện lại khi gửi form sai) ?>
+<div class="auth">
+    <?php include __DIR__ . '/auth_aside.php'; ?>
+
+    <main class="auth-main">
+        <button type="button" class="t-icon-btn t-theme-btn t-theme-fab" data-theme-toggle aria-label="Đổi giao diện sáng / tối" title="Đổi giao diện sáng / tối"><?= ic('sun', 19) ?><?= ic('moon', 19) ?></button>
+
+        <div class="auth-card">
+            <a class="auth-logo" href="/login.php"><span class="t-brand-icon"><?= ic('box', 22) ?></span><b>Alt F4<span class="auth-brand-hub"> Hub</span></b></a>
+
+            <h1>Đăng nhập</h1>
+            <p class="auth-sub">Chào mừng trở lại. Đăng nhập để mượn và theo dõi thiết bị phòng Lab.</p>
+
             <?php if ($error): ?>
-                <div class="alert alert-danger py-2"><?= htmlspecialchars($error) ?></div>
+                <div class="alert alert-danger" role="alert"><?= ic('alert', 18) ?><span><?= htmlspecialchars($error) ?></span></div>
             <?php endif; ?>
-            <form method="POST">
-                <div class="mb-3">
-                    <label class="form-label">Email:</label>
-                    <input type="email" name="email" class="form-control" placeholder="admin@gmail.com hoặc student@gmail.com" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Mật khẩu:</label>
-                    <input type="password" name="password" class="form-control" placeholder="Mật khẩu" required>
-                </div>
-                <button type="submit" class="btn btn-primary w-100 py-2">Đăng nhập</button>
-                <div style="margin-top: 20px; text-align: center; font-size: 0.88rem; color: #59627E;">
-                    Chưa có tài khoản? <a href="/register.php" style="color: #2563EB; font-weight: 600; text-decoration: none;">Đăng ký tài khoản mới</a>
-                </div>
+
+            <form method="POST" class="auth-form">
+                <label class="field">
+                    <span>Email</span>
+                    <input type="email" name="email" class="form-control" placeholder="ten@gmail.com" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" autocomplete="username" required autofocus>
+                </label>
+                <label class="field">
+                    <span>Mật khẩu</span>
+                    <input type="password" name="password" class="form-control" placeholder="Nhập mật khẩu" autocomplete="current-password" required>
+                </label>
+                <button type="submit" class="btn-submit">Đăng nhập <?= ic('arrow', 18) ?></button>
             </form>
-            <div class="mt-3 text-muted small">
-                Demo Accounts:<br>
-                - Admin: <code>admin@gmail.com</code> / <code>admin123</code><br>
-                - Sinh viên: <code>student@gmail.com</code> / <code>123456</code>
+
+            <p class="auth-alt">Chưa có tài khoản? <a href="/register.php">Đăng ký tài khoản mới</a></p>
+
+            <div class="demo-box">
+                <p class="demo-title">Tài khoản demo <small>(bấm để điền nhanh)</small></p>
+                <div class="demo-list">
+                    <button type="button" class="demo-chip" data-fill-email="admin@gmail.com" data-fill-pass="admin123">
+                        <span class="demo-role">Admin</span><code>admin@gmail.com</code><code>admin123</code>
+                    </button>
+                    <button type="button" class="demo-chip" data-fill-email="student@gmail.com" data-fill-pass="123456">
+                        <span class="demo-role">Sinh viên</span><code>student@gmail.com</code><code>123456</code>
+                    </button>
+                </div>
             </div>
         </div>
-    </div>
+    </main>
 </div>
 </body>
 </html>

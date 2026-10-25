@@ -1,216 +1,174 @@
 <?php
-$current_page = basename($_SERVER['PHP_SELF']);
+/* ==========================================================================
+   navbar.php — khung điều hướng dùng chung (thanh bên + thanh trên + thanh dưới mobile)
+   Được include ở đầu <body> của mọi trang đã đăng nhập. Giữ nguyên các biến
+   $current_page, $is_admin_folder, $user như bản gốc để các trang khác không bị ảnh hưởng.
+   ========================================================================== */
+require_once __DIR__ . '/ui.php';
+
+$current_page    = basename($_SERVER['PHP_SELF']);
 $is_admin_folder = strpos($_SERVER['PHP_SELF'], '/admin/') !== false;
-$user = $_SESSION['user'] ?? null;
+$user            = $_SESSION['user'] ?? null;
+
+$navIsAdmin = ($user && $user['role'] === 'admin');
+$navKey     = ($is_admin_folder ? 'admin/' : '') . $current_page;
+
+// Tiêu đề trang (hiện ở breadcrumb)
+$navTitles = [
+    'index.php'              => 'Kho thiết bị',
+    'device_detail.php'      => 'Chi tiết thiết bị',
+    'borrow.php'             => 'Đăng ký mượn',
+    'my_borrows.php'         => 'Phiếu mượn của tôi',
+    'request_detail.php'     => 'Chi tiết phiếu mượn',
+    'profile.php'            => 'Hồ sơ cá nhân',
+    'admin/index.php'        => 'Dashboard',
+    'admin/devices.php'      => 'Quản lý thiết bị',
+    'admin/device_edit.php'  => 'Chỉnh sửa thiết bị',
+    'admin/categories.php'   => 'Danh mục',
+    'admin/requests.php'     => 'Duyệt phiếu mượn',
+    'admin/users.php'        => 'Người dùng',
+    'admin/reports.php'      => 'Báo cáo & thống kê',
+];
+$navTitle = $navTitles[$navKey] ?? 'Alt F4 Hub';
+
+// Mục menu đang được chọn
+$navOn = [
+    'kho'   => in_array($navKey, ['index.php', 'device_detail.php', 'borrow.php']),
+    'mine'  => ($navKey === 'my_borrows.php') || ($navKey === 'request_detail.php' && !$navIsAdmin),
+    'prof'  => ($navKey === 'profile.php'),
+    'dash'  => ($navKey === 'admin/index.php'),
+    'dev'   => in_array($navKey, ['admin/devices.php', 'admin/device_edit.php']),
+    'req'   => ($navKey === 'admin/requests.php') || ($navKey === 'request_detail.php' && $navIsAdmin),
+    'users' => ($navKey === 'admin/users.php'),
+    'cat'   => ($navKey === 'admin/categories.php'),
+    'rep'   => ($navKey === 'admin/reports.php'),
+];
+$navCls = [];
+$navCur = [];
+foreach ($navOn as $k => $on) {
+    $navCls[$k] = $on ? 'is-active' : '';
+    $navCur[$k] = $on ? 'aria-current="page"' : '';
+}
+
+// Số liệu nhỏ cho huy hiệu (an toàn nếu truy vấn lỗi)
+$navPending = 0;   // admin: số phiếu chờ duyệt
+$navMine    = 0;   // số phiếu đang chờ/đang mượn của chính mình
+$navAlert   = 0;   // chuông: admin = phiếu chờ duyệt, sinh viên = món sắp/quá hạn trả
+if ($user && isset($pdo)) {
+    try {
+        $navSt = $pdo->prepare("SELECT COUNT(*) FROM borrow_requests WHERE user_id = ? AND status IN ('pending','approved')");
+        $navSt->execute([$user['id']]);
+        $navMine = (int)$navSt->fetchColumn();
+
+        if ($navIsAdmin) {
+            $navPending = (int)$pdo->query("SELECT COUNT(*) FROM borrow_requests WHERE status = 'pending'")->fetchColumn();
+            $navAlert   = $navPending;
+        } else {
+            $navSt = $pdo->prepare("SELECT COUNT(*) FROM borrow_requests WHERE user_id = ? AND status = 'approved' AND DATEDIFF(expected_return_date, CURDATE()) <= 2");
+            $navSt->execute([$user['id']]);
+            $navAlert = (int)$navSt->fetchColumn();
+        }
+    } catch (Throwable $e) {
+        // Không để lỗi thống kê làm hỏng trang
+    }
+}
+$navAlertHref  = $navIsAdmin ? '/admin/requests.php?status=pending' : '/my_borrows.php?status=approved';
+$navAlertLabel = $navIsAdmin ? 'phiếu mượn đang chờ duyệt' : 'thiết bị sắp hoặc đã quá hạn trả';
+
+// Tên viết tắt cho avatar: "Nguyễn Văn An" → "NA"
+$navInit = '';
+if ($user) {
+    $navParts = preg_split('/\s+/u', trim($user['fullname']));
+    $navInit  = mb_substr($navParts[0], 0, 1, 'UTF-8');
+    if (count($navParts) > 1) {
+        $navInit .= mb_substr($navParts[count($navParts) - 1], 0, 1, 'UTF-8');
+    }
+    $navInit = mb_strtoupper($navInit, 'UTF-8');
+}
+$navRole = ($user && $user['role'] === 'admin') ? 'Quản trị viên' : (($user && !empty($user['student_code'])) ? $user['student_code'] : 'Sinh viên');
 ?>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<div class="t-scrim" data-drawer-close></div>
 
-<style>
-:root {
-    --nav-ink: #020C21;
-    --nav-ink-muted: #59627E;
-    --nav-accent: #2563EB;
-    --nav-glass-bg: rgba(255, 255, 255, 0.88);
-    --nav-glass-border: rgba(255, 255, 255, 0.95);
-    --nav-glass-shadow: 0 8px 24px rgba(15, 24, 47, 0.05);
-    --nav-pill-active: #0F182F;
-}
+<!-- Thanh bên dạng kính nổi: thu gọn thành thanh icon, rê chuột để bung ra, nút tay nắm để ghim mở / thu gọn -->
+<div class="t-dock" id="tDock">
+<aside class="t-side" id="tSide" aria-label="Điều hướng chính">
+    <a class="t-brand" href="/index.php" title="Alt F4 Hub">
+        <span class="t-brand-icon"><?= ic('box', 24) ?></span>
+        <span class="t-brand-text">Alt F4<span class="t-brand-hub"> Hub</span><small>Lab equipment manager</small></span>
+    </a>
 
-.global-header {
-    position: sticky;
-    top: 14px;
-    z-index: 1000;
-    margin: 0 auto 28px;
-    max-width: 1240px;
-    padding: 0 16px;
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    transform: translateZ(0);
-}
+    <div class="t-workspace">
+        <span class="t-workspace-icon">L</span>
+        <div>Không gian phòng Lab<small>ĐH Bình Dương · PH Cà Mau</small></div>
+    </div>
 
-.global-nav-bar {
-    background: var(--nav-glass-bg);
-    border: 1px solid var(--nav-glass-border);
-    border-radius: 999px;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    box-shadow: var(--nav-glass-shadow);
-    padding: 7px 14px 7px 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 15px;
-}
-
-.nav-brand-group {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    text-decoration: none;
-    color: var(--nav-ink);
-}
-
-.nav-brand-icon {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #0F182F, #2563EB);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.15rem;
-    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
-}
-
-.nav-brand-text { display: flex; flex-direction: column; }
-.nav-brand-text b { font-size: 1.05rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
-.nav-brand-text span { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; color: var(--nav-ink-muted); }
-
-.nav-menu-links {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    overflow-x: auto;
-}
-
-.nav-item-link {
-    text-decoration: none;
-    color: #334155;
-    font-size: 0.85rem;
-    font-weight: 600;
-    padding: 8px 14px;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.15s ease;
-    white-space: nowrap;
-}
-
-.nav-item-link:hover { color: var(--nav-accent); background: rgba(255, 255, 255, 0.7); }
-.nav-item-link.active { background: var(--nav-pill-active); color: #ffffff !important; }
-
-.nav-menu-divider { width: 1px; height: 20px; background: #CBD5E1; margin: 0 4px; }
-.nav-badge-admin { background: #FEF3C7; color: #92400E; font-size: 0.7rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
-
-.nav-user-control { display: flex; align-items: center; gap: 10px; }
-.nav-profile-chip {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(255, 255, 255, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.9);
-    padding: 4px 14px 4px 6px;
-    border-radius: 999px;
-    text-decoration: none;
-    color: var(--nav-ink);
-    transition: all 0.15s ease;
-}
-.nav-profile-chip:hover { background: #ffffff; }
-
-.nav-avatar-circle {
-    width: 32px; height: 32px; border-radius: 50%;
-    background: #E2E8F0; color: #334155; font-weight: 700; font-size: 0.8rem;
-    display: flex; align-items: center; justify-content: center;
-}
-
-.btn-nav-logout {
-    width: 36px; height: 36px; border-radius: 50%;
-    background: #FEE2E2; color: #DC2626; border: 1px solid #FECACA;
-    display: flex; align-items: center; justify-content: center;
-    text-decoration: none; font-size: 0.95rem; transition: all 0.15s ease;
-}
-.btn-nav-logout:hover { background: #DC2626; color: #ffffff; }
-
-@media (max-width: 992px) {
-    .global-nav-bar { border-radius: 20px; flex-wrap: wrap; }
-    .nav-menu-links { order: 3; width: 100%; border-top: 1px solid #E2E8F0; padding-top: 10px; }
-}
-</style>
-
-<header class="global-header">
-    <nav class="global-nav-bar">
-        <a href="/index.php" class="nav-brand-group">
-            <span class="nav-brand-icon"><i class="bi bi-shield-check"></i></span>
-            <div class="nav-brand-text">
-                <b>Alt F4</b>
-                <span>Quản Lý Thiết Bị Lab</span>
-            </div>
-        </a>
-
-        <ul class="nav-menu-links">
-            <li>
-                <a href="/index.php" class="nav-item-link <?= ($current_page === 'index.php' && !$is_admin_folder) ? 'active' : '' ?>">
-                    <i class="bi bi-grid-fill"></i> Kho Thiết Bị
-                </a>
-            </li>
-            <li>
-                <a href="/my_borrows.php" class="nav-item-link <?= ($current_page === 'my_borrows.php') ? 'active' : '' ?>">
-                    <i class="bi bi-card-checklist"></i> Phiếu Của Tôi
-                </a>
-            </li>
-
-            <?php if ($user && $user['role'] === 'admin'): ?>
-                <li class="nav-menu-divider"></li>
-                <li>
-                    <a href="/admin/index.php" class="nav-item-link <?= ($current_page === 'index.php' && $is_admin_folder) ? 'active' : '' ?>">
-                        <i class="bi bi-speedometer2"></i> Dashboard
-                    </a>
-                </li>
-                <li>
-                    <a href="/admin/devices.php" class="nav-item-link <?= ($current_page === 'devices.php' || $current_page === 'device_edit.php') ? 'active' : '' ?>">
-                        <i class="bi bi-cpu"></i> Thiết Bị
-                    </a>
-                </li>
-                <li>
-                    <a href="/admin/categories.php" class="nav-item-link <?= ($current_page === 'categories.php') ? 'active' : '' ?>">
-                        <i class="bi bi-tags"></i> Danh Mục
-                    </a>
-                </li>
-                <li>
-                    <a href="/admin/requests.php" class="nav-item-link <?= ($current_page === 'requests.php') ? 'active' : '' ?>">
-                        <i class="bi bi-clipboard2-check"></i> Duyệt Mượn
-                    </a>
-                </li>
-                <li>
-                    <a href="/admin/users.php" class="nav-item-link <?= ($current_page === 'users.php') ? 'active' : '' ?>">
-                        <i class="bi bi-people"></i> Tài Khoản
-                    </a>
-                </li>
-                <li>
-                    <a href="/admin/reports.php" class="nav-item-link <?= ($current_page === 'reports.php') ? 'active' : '' ?>">
-                        <i class="bi bi-bar-chart-line"></i> Báo Cáo
-                    </a>
-                </li>
-                <li>
-                    <a href="http://localhost:9001" target="_blank" class="nav-item-link" style="color: #D97706;" title="Mở MinIO S3 Console">
-                        <i class="bi bi-cloud-arrow-up-fill"></i> MinIO
-                    </a>
-                </li>
-            <?php endif; ?>
-        </ul>
-
-        <div class="nav-user-control">
-            <?php if ($user): ?>
-                <a href="/profile.php" class="nav-profile-chip" title="Xem hồ sơ & đổi mật khẩu">
-                    <span class="nav-avatar-circle"><?= mb_substr($user['fullname'], 0, 1, 'UTF-8') ?></span>
-                    <div style="display: flex; flex-direction: column;">
-                        <span style="font-size: 0.82rem; font-weight: 700;"><?= htmlspecialchars($user['fullname']) ?></span>
-                        <span style="font-size: 0.68rem; color: #64748B;">
-                            <?= $user['role'] === 'admin' ? '<span class="nav-badge-admin">Admin</span>' : htmlspecialchars($user['student_code'] ?? 'Sinh viên') ?>
-                        </span>
-                    </div>
-                </a>
-                <a href="/logout.php" class="btn-nav-logout" title="Đăng xuất"><i class="bi bi-box-arrow-right"></i></a>
-            <?php else: ?>
-                <a href="/login.php" class="nav-item-link active">Đăng nhập</a>
-            <?php endif; ?>
-        </div>
+    <p class="t-label"><b>Không gian làm việc</b></p>
+    <nav class="t-navlist">
+        <a class="t-nav <?= $navCls['kho'] ?>" href="/index.php" title="Kho thiết bị" <?= $navCur['kho'] ?>><?= ic('box') ?><span>Kho thiết bị</span></a>
+        <a class="t-nav <?= $navCls['mine'] ?>" href="/my_borrows.php" title="Phiếu mượn của tôi" <?= $navCur['mine'] ?>><?= ic('list') ?><span>Phiếu mượn của tôi</span><?php if ($navMine > 0): ?><em class="t-count"><?= $navMine ?></em><?php endif; ?></a>
+        <a class="t-nav <?= $navCls['prof'] ?>" href="/profile.php" title="Hồ sơ cá nhân" <?= $navCur['prof'] ?>><?= ic('user') ?><span>Hồ sơ cá nhân</span></a>
     </nav>
+
+    <?php if ($navIsAdmin): ?>
+    <p class="t-label t-label-admin"><b>Quản trị</b> <span>Admin</span></p>
+    <nav class="t-navlist">
+        <a class="t-nav <?= $navCls['dash'] ?>" href="/admin/index.php" title="Dashboard" <?= $navCur['dash'] ?>><?= ic('grid') ?><span>Dashboard</span></a>
+        <a class="t-nav <?= $navCls['dev'] ?>" href="/admin/devices.php" title="Quản lý thiết bị" <?= $navCur['dev'] ?>><?= ic('box') ?><span>Quản lý thiết bị</span></a>
+        <a class="t-nav <?= $navCls['req'] ?>" href="/admin/requests.php" title="Duyệt phiếu mượn" <?= $navCur['req'] ?>><?= ic('clock') ?><span>Duyệt phiếu mượn</span><?php if ($navPending > 0): ?><em class="t-count t-count-warn"><?= $navPending ?></em><?php endif; ?></a>
+        <a class="t-nav <?= $navCls['users'] ?>" href="/admin/users.php" title="Người dùng" <?= $navCur['users'] ?>><?= ic('users') ?><span>Người dùng</span></a>
+        <a class="t-nav <?= $navCls['cat'] ?>" href="/admin/categories.php" title="Danh mục" <?= $navCur['cat'] ?>><?= ic('tag') ?><span>Danh mục</span></a>
+        <a class="t-nav <?= $navCls['rep'] ?>" href="/admin/reports.php" title="Báo cáo &amp; thống kê" <?= $navCur['rep'] ?>><?= ic('chart') ?><span>Báo cáo &amp; thống kê</span></a>
+        <a class="t-nav" href="http://localhost:9001" target="_blank" rel="noopener" title="Mở MinIO S3 Console"><?= ic('cloud') ?><span>MinIO Console</span><?= ic('external', 14) ?></a>
+    </nav>
+    <?php endif; ?>
+
+    <div class="t-side-bottom">
+        <div class="t-help">
+            <span class="t-help-icon"><?= ic('help') ?></span>
+            <b>Cần một chút hỗ trợ?</b>
+            <p>Xem nhanh cách mượn và sử dụng thiết bị phòng Lab.</p>
+            <button type="button" data-toast="Chọn thiết bị → Đăng ký mượn → Chờ quản trị viên duyệt → Nhận thiết bị và trả đúng hạn.">Xem hướng dẫn <?= ic('arrow', 15) ?></button>
+        </div>
+        <?php if ($user): ?>
+        <div class="t-me">
+            <a class="t-me-link" href="/profile.php" title="Xem hồ sơ &amp; đổi mật khẩu">
+                <span class="t-avatar"><?= t_esc($navInit) ?></span>
+                <span class="t-me-text"><b><?= t_esc($user['fullname']) ?></b><small><?= t_esc($navRole) ?></small></span>
+            </a>
+            <a class="t-me-out" href="/logout.php" title="Đăng xuất" aria-label="Đăng xuất"><?= ic('logout', 18) ?></a>
+        </div>
+        <?php endif; ?>
+        <div class="t-side-foot"><span class="t-dot"></span><span class="t-side-foot-text">Hệ thống hoạt động ổn định</span><span class="t-side-foot-ver">v2.0</span></div>
+    </div>
+</aside>
+<button type="button" class="t-dock-toggle" data-side-toggle aria-controls="tSide" aria-expanded="true" aria-label="Thu gọn thanh bên" title="Thu gọn / mở rộng thanh bên"><?= ic('chevron', 15) ?></button>
+</div>
+
+<header class="t-top">
+    <button type="button" class="t-icon-btn t-burger" data-drawer-open aria-label="Mở menu" aria-controls="tSide"><?= ic('menu', 22) ?></button>
+    <div class="t-crumb"><span class="t-crumb-root">Không gian làm việc</span><span class="t-crumb-sep">/</span><b><?= t_esc($navTitle) ?></b></div>
+    <div class="t-top-right">
+        <span class="t-today"><?= vn_date() ?></span>
+        <button type="button" class="t-icon-btn t-theme-btn" data-theme-toggle aria-label="Đổi giao diện sáng / tối" title="Đổi giao diện sáng / tối"><?= ic('sun', 19) ?><?= ic('moon', 19) ?></button>
+        <a class="t-icon-btn t-bell" href="<?= $navAlertHref ?>" aria-label="Thông báo: <?= $navAlert ?> <?= $navAlertLabel ?>" title="<?= $navAlert ?> <?= $navAlertLabel ?>"><?= ic('bell', 19) ?><?php if ($navAlert > 0): ?><i class="t-bell-dot"></i><?php endif; ?></a>
+        <?php if ($user): ?>
+        <a class="t-user" href="/profile.php" title="Hồ sơ cá nhân">
+            <span class="t-avatar"><?= t_esc($navInit) ?></span>
+            <span class="t-user-text"><b><?= t_esc($user['fullname']) ?></b><small><?= t_esc($navRole) ?></small></span>
+        </a>
+        <?php endif; ?>
+    </div>
 </header>
+
+<nav class="t-bottom" aria-label="Điều hướng nhanh">
+    <a class="<?= $navCls['kho'] ?>" href="/index.php" <?= $navCur['kho'] ?>><?= ic('box', 21) ?><span>Kho</span></a>
+    <?php if ($navIsAdmin): ?>
+    <a class="<?= $navCls['dash'] ?>" href="/admin/index.php" <?= $navCur['dash'] ?>><?= ic('grid', 21) ?><span>Dashboard</span></a>
+    <a class="<?= $navCls['req'] ?>" href="/admin/requests.php" <?= $navCur['req'] ?>><?= ic('clock', 21) ?><span>Duyệt phiếu</span><?php if ($navPending > 0): ?><em class="t-count t-count-warn"><?= $navPending ?></em><?php endif; ?></a>
+    <a class="<?= $navCls['dev'] ?>" href="/admin/devices.php" <?= $navCur['dev'] ?>><?= ic('settings', 21) ?><span>Thiết bị</span></a>
+    <?php else: ?>
+    <a class="<?= $navCls['mine'] ?>" href="/my_borrows.php" <?= $navCur['mine'] ?>><?= ic('list', 21) ?><span>Phiếu của tôi</span><?php if ($navMine > 0): ?><em class="t-count"><?= $navMine ?></em><?php endif; ?></a>
+    <a class="<?= $navCls['prof'] ?>" href="/profile.php" <?= $navCur['prof'] ?>><?= ic('user', 21) ?><span>Hồ sơ</span></a>
+    <?php endif; ?>
+    <button type="button" data-drawer-open aria-label="Mở menu đầy đủ"><?= ic('menu', 21) ?><span>Menu</span></button>
+</nav>

@@ -1,3 +1,7 @@
+-- Bắt buộc: ép phiên import dùng UTF-8, nếu không MySQL sẽ đọc tiếng Việt như latin1
+-- và lưu thành chữ lỗi kiểu "Quáº£n trá»‹ viÃªn".
+SET NAMES utf8mb4;
+
 CREATE DATABASE IF NOT EXISTS ql_thietbi CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE ql_thietbi;
 

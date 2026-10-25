@@ -127,7 +127,7 @@ $today = new DateTime('today');
             .metrics-grid { grid-template-columns: 1fr; }
         }
     </style>
-    <link rel="stylesheet" href="/assets/theme.css?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.css') ?>"><script src="/assets/theme.js?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.js') ?>"></script>
+    <?php include __DIR__ . '/../head.php'; ?>
 </head>
 <body>
 
