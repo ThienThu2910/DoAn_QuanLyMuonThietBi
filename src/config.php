@@ -21,6 +21,10 @@ try {
     die("Lỗi kết nối cơ sở dữ liệu: " . $e->getMessage());
 }
 
+// Tự sửa dữ liệu tiếng Việt bị lỗi mã hoá (Quáº£n trá»‹ viÃªn → Quản trị viên) nếu có
+require_once __DIR__ . '/encoding_fix.php';
+altf4_auto_repair($pdo);
+
 function checkLogin() {
     if (!isset($_SESSION['user'])) {
         header("Location: /login.php");

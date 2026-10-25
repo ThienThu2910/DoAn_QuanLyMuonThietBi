@@ -97,104 +97,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Đăng Ký Mượn Thiết Bị • <?= htmlspecialchars($device['name']) ?></title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <style>
-        :root {
-            --ink: #020C21;
-            --frame: #E6EDF6;
-            --cta: #0F1B31;
-            --accent: #2563EB;
-            --glass-bg: rgba(255, 255, 255, 0.78);
-            --glass-border: rgba(255, 255, 255, 0.9);
-        }
-        body {
-            background-color: var(--frame);
-            color: var(--ink);
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 30px 15px;
-            margin: 0;
-        }
-        .form-card {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 28px;
-            backdrop-filter: blur(40px);
-            box-shadow: 0 20px 45px rgba(28, 52, 92, 0.08);
-            width: 100%;
-            max-width: 650px;
-            padding: 40px;
-            box-sizing: border-box;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        .form-group label {
-            display: block;
-            font-size: 0.88rem;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: #334155;
-        }
-        .form-control {
-            width: 100%;
-            padding: 12px 18px;
-            border-radius: 14px;
-            border: 1px solid #CBD5E1;
-            background: rgba(255, 255, 255, 0.9);
-            font-size: 0.95rem;
-            outline: none;
-            box-sizing: border-box;
-            font-family: inherit;
-            transition: border 0.2s ease;
-        }
-        .form-control:focus {
-            border-color: var(--accent);
-        }
-        .btn-submit {
-            background: var(--cta);
-            color: #fff;
-            padding: 14px 28px;
-            border-radius: 999px;
-            border: none;
-            font-weight: 700;
-            cursor: pointer;
-            width: 100%;
-            font-size: 1rem;
-            transition: all 0.2s;
-        }
-        .btn-submit:hover {
-            opacity: 0.92;
-            transform: translateY(-2px);
-        }
-        .alert {
-            padding: 14px 20px;
-            border-radius: 14px;
-            margin-bottom: 20px;
-            font-size: 0.9rem;
-            font-weight: 600;
-        }
-        .alert-danger {
-            background: #FEE2E2;
-            color: #991B1B;
-            border: 1px solid #FCA5A5;
-        }
-        .alert-success {
-            background: #D1FAE5;
-            color: #065F46;
-            border: 1px solid #6EE7B7;
-        }
-    </style>
-    <link rel="stylesheet" href="/assets/theme.css?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.css') ?>"><script src="/assets/theme.js?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.js') ?>"></script>
+    <?php include __DIR__ . '/head.php'; ?>
 </head>
 <body>
-
+<?php include __DIR__ . '/navbar.php'; ?>
+<main class="container narrow">
 <div class="form-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
         <h2 style="font-weight: 700; font-size: 1.5rem; margin: 0;">Phiếu Mượn Thiết Bị</h2>
@@ -273,6 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </form>
     <?php endif; ?>
 </div>
+</main>
 
 <script>
 function updateReturnDateMin() {

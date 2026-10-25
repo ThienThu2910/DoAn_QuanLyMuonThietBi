@@ -27,10 +27,6 @@ $borrowTurnCount = $stmtCount->fetchColumn();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chi Tiết Thiết Bị • <?= htmlspecialchars($device['name']) ?></title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
         :root {
             --ink: #020C21; --muted: #59627E; --frame: #E6EDF6; --cta: #0F1B31;
@@ -79,7 +75,7 @@ $borrowTurnCount = $stmtCount->fetchColumn();
             .image-preview-plate { height: 260px; }
         }
     </style>
-    <link rel="stylesheet" href="/assets/theme.css?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.css') ?>"><script src="/assets/theme.js?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/theme.js') ?>"></script>
+    <?php include __DIR__ . '/head.php'; ?>
 </head>
 <body>
 

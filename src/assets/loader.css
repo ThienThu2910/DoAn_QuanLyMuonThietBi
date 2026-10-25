@@ -1,0 +1,114 @@
+/* ==========================================================================
+   Alt F4 Hub — màn hình loading hex (hiện ~3 giây trước trang đăng nhập)
+   Hình học + chuyển động lấy đúng theo mẫu trong tài liệu yêu cầu
+   (.socket / .gel / .hex-brick, pulse + fade 2s, trễ .2s/.4s/.6s theo hàng);
+   chỉ đổi màu sang tông xanh của thương hiệu và tách phạm vi trong #altLoader.
+   ========================================================================== */
+#altLoader {
+    --ld-a: #2E9C80; --ld-b: #0A4A3A; --ld-c: #55BFA2;          /* 0% · 50% · 100% của fade */
+    position: fixed; inset: 0; z-index: 99999; overflow: hidden;
+    background:
+        radial-gradient(60vmax 50vmax at 12% -8%, rgba(86, 214, 172, .45), transparent 60%),
+        radial-gradient(55vmax 45vmax at 100% 10%, rgba(120, 190, 255, .32), transparent 60%),
+        radial-gradient(50vmax 50vmax at 70% 110%, rgba(120, 235, 200, .38), transparent 60%),
+        #E6F0EC;
+    transition: opacity .7s ease, visibility .7s ease;
+}
+html[data-theme="dark"] #altLoader {
+    --ld-a: #1F6B58; --ld-b: #D9FFF1; --ld-c: #3FB594;
+    background:
+        radial-gradient(60vmax 50vmax at 12% -8%, rgba(23, 132, 106, .5), transparent 60%),
+        radial-gradient(55vmax 45vmax at 100% 10%, rgba(48, 110, 170, .3), transparent 60%),
+        radial-gradient(50vmax 50vmax at 70% 110%, rgba(20, 150, 120, .3), transparent 60%),
+        #07120E;
+}
+#altLoader.is-done { opacity: 0; visibility: hidden; pointer-events: none; }
+
+/* tấm kính tròn phía sau để ô lục giác "nổi" lên */
+#altLoader .ld-plate {
+    position: absolute; left: 50%; top: 50%; width: 270px; height: 270px; margin: -135px 0 0 -135px; border-radius: 50%;
+    background: linear-gradient(150deg, rgba(255, 255, 255, .55), rgba(255, 255, 255, .12));
+    border: 1px solid rgba(255, 255, 255, .6);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 30px 70px -28px rgba(10, 74, 58, .5);
+    -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
+}
+html[data-theme="dark"] #altLoader .ld-plate {
+    background: linear-gradient(150deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .02));
+    border-color: rgba(255, 255, 255, .14);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 30px 70px -28px rgba(0, 0, 0, .8);
+}
+
+#altLoader .socket { width: 200px; height: 200px; position: absolute; left: 50%; margin-left: -100px; top: 50%; margin-top: -100px; }
+#altLoader .hex-brick {
+    background: var(--ld-b); width: 30px; height: 17px; position: absolute; top: 5px;
+    animation-name: altf4-fade; animation-duration: 2s; animation-iteration-count: infinite;
+    -webkit-animation-name: altf4-fade; -webkit-animation-duration: 2s; -webkit-animation-iteration-count: infinite;
+}
+#altLoader .h2 { transform: rotate(60deg); -webkit-transform: rotate(60deg); }
+#altLoader .h3 { transform: rotate(-60deg); -webkit-transform: rotate(-60deg); }
+#altLoader .gel { height: 30px; width: 30px; transition: all .3s; -webkit-transition: all .3s; position: absolute; top: 50%; left: 50%; }
+#altLoader .center-gel {
+    margin-left: -15px; margin-top: -15px;
+    animation-name: altf4-pulse; animation-duration: 2s; animation-iteration-count: infinite;
+    -webkit-animation-name: altf4-pulse; -webkit-animation-duration: 2s; -webkit-animation-iteration-count: infinite;
+}
+#altLoader .c1 { margin-left: -47px; margin-top: -15px; }
+#altLoader .c2 { margin-left: -31px; margin-top: -43px; }
+#altLoader .c3 { margin-left: 1px; margin-top: -43px; }
+#altLoader .c4 { margin-left: 17px; margin-top: -15px; }
+#altLoader .c5 { margin-left: -31px; margin-top: 13px; }
+#altLoader .c6 { margin-left: 1px; margin-top: 13px; }
+#altLoader .c7 { margin-left: -63px; margin-top: -43px; }
+#altLoader .c8 { margin-left: 33px; margin-top: -43px; }
+#altLoader .c9 { margin-left: -15px; margin-top: 41px; }
+#altLoader .c10 { margin-left: -63px; margin-top: 13px; }
+#altLoader .c11 { margin-left: 33px; margin-top: 13px; }
+#altLoader .c12 { margin-left: -15px; margin-top: -71px; }
+#altLoader .c13 { margin-left: -47px; margin-top: -71px; }
+#altLoader .c14 { margin-left: 17px; margin-top: -71px; }
+#altLoader .c15 { margin-left: -47px; margin-top: 41px; }
+#altLoader .c16 { margin-left: 17px; margin-top: 41px; }
+#altLoader .c17 { margin-left: -79px; margin-top: -15px; }
+#altLoader .c18 { margin-left: 49px; margin-top: -15px; }
+#altLoader .c19 { margin-left: -63px; margin-top: -99px; }
+#altLoader .c20 { margin-left: 33px; margin-top: -99px; }
+#altLoader .c21 { margin-left: 1px; margin-top: -99px; }
+#altLoader .c22 { margin-left: -31px; margin-top: -99px; }
+#altLoader .c23 { margin-left: -63px; margin-top: 69px; }
+#altLoader .c24 { margin-left: 33px; margin-top: 69px; }
+#altLoader .c25 { margin-left: 1px; margin-top: 69px; }
+#altLoader .c26 { margin-left: -31px; margin-top: 69px; }
+#altLoader .c28 { margin-left: -95px; margin-top: -43px; }
+#altLoader .c29 { margin-left: -95px; margin-top: 13px; }
+#altLoader .c30 { margin-left: 49px; margin-top: 41px; }
+#altLoader .c31 { margin-left: -79px; margin-top: -71px; }
+#altLoader .c32 { margin-left: -111px; margin-top: -15px; }
+#altLoader .c33 { margin-left: 65px; margin-top: -43px; }
+#altLoader .c34 { margin-left: 65px; margin-top: 13px; }
+#altLoader .c35 { margin-left: -79px; margin-top: 41px; }
+#altLoader .c36 { margin-left: 49px; margin-top: -71px; }
+#altLoader .c37 { margin-left: 81px; margin-top: -15px; }
+#altLoader .r1 { animation-name: altf4-pulse; animation-duration: 2s; animation-iteration-count: infinite; animation-delay: .2s; -webkit-animation-name: altf4-pulse; -webkit-animation-duration: 2s; -webkit-animation-iteration-count: infinite; -webkit-animation-delay: .2s; }
+#altLoader .r2 { animation-name: altf4-pulse; animation-duration: 2s; animation-iteration-count: infinite; animation-delay: .4s; -webkit-animation-name: altf4-pulse; -webkit-animation-duration: 2s; -webkit-animation-iteration-count: infinite; -webkit-animation-delay: .4s; }
+#altLoader .r3 { animation-name: altf4-pulse; animation-duration: 2s; animation-iteration-count: infinite; animation-delay: .6s; -webkit-animation-name: altf4-pulse; -webkit-animation-duration: 2s; -webkit-animation-iteration-count: infinite; -webkit-animation-delay: .6s; }
+#altLoader .r1 > .hex-brick { animation-name: altf4-fade; animation-duration: 2s; animation-iteration-count: infinite; animation-delay: .2s; -webkit-animation-name: altf4-fade; -webkit-animation-duration: 2s; -webkit-animation-iteration-count: infinite; -webkit-animation-delay: .2s; }
+#altLoader .r2 > .hex-brick { animation-name: altf4-fade; animation-duration: 2s; animation-iteration-count: infinite; animation-delay: .4s; -webkit-animation-name: altf4-fade; -webkit-animation-duration: 2s; -webkit-animation-iteration-count: infinite; -webkit-animation-delay: .4s; }
+#altLoader .r3 > .hex-brick { animation-name: altf4-fade; animation-duration: 2s; animation-iteration-count: infinite; animation-delay: .6s; -webkit-animation-name: altf4-fade; -webkit-animation-duration: 2s; -webkit-animation-iteration-count: infinite; -webkit-animation-delay: .6s; }
+
+@keyframes altf4-pulse { 0% { -webkit-transform: scale(1); transform: scale(1); } 50% { -webkit-transform: scale(0.01); transform: scale(0.01); } 100% { -webkit-transform: scale(1); transform: scale(1); } }
+@keyframes altf4-fade  { 0% { background: var(--ld-a); } 50% { background: var(--ld-b); } 100% { background: var(--ld-c); } }
+
+/* chú thích dưới loader */
+#altLoader .ld-caption { position: absolute; left: 0; right: 0; top: calc(50% + 158px); display: grid; justify-items: center; gap: 6px; text-align: center; font-family: var(--t-font, 'Be Vietnam Pro', system-ui, sans-serif); }
+#altLoader .ld-caption b { font-size: 17px; font-weight: 800; letter-spacing: -.03em; color: var(--t-ink, #12261F); }
+#altLoader .ld-caption b i { font-style: normal; font-weight: 500; color: var(--t-brand-text, #14795F); }
+#altLoader .ld-caption span { font-size: 12.5px; letter-spacing: .02em; color: var(--t-muted, #566860); }
+#altLoader .ld-bar { width: 132px; height: 3px; margin-top: 8px; border-radius: 99px; background: rgba(20, 121, 95, .16); overflow: hidden; }
+#altLoader .ld-bar::after { content: ""; display: block; height: 100%; width: 100%; border-radius: inherit; background: linear-gradient(90deg, #14795F, #62D0AA); transform-origin: 0 50%; animation: altf4-load 3s cubic-bezier(.4, 0, .2, 1) forwards; }
+@keyframes altf4-load { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* trang đăng nhập chờ loader xong mới chạy hiệu ứng xuất hiện */
+html.t-loading-page { overflow: hidden; }
+html.t-loading-page .auth-card, html.t-loading-page .auth-aside > * { animation-play-state: paused; }
+
+@media (max-width: 420px) { #altLoader .ld-plate { width: 230px; height: 230px; margin: -115px 0 0 -115px; } #altLoader .ld-caption { top: calc(50% + 138px); } }
