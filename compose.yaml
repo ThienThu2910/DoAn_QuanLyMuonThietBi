@@ -36,6 +36,20 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - cloud_network
+      
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: thietbi_phpmyadmin
+    restart: always
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: database
+      PMA_PORT: 3306
+    depends_on:
+      - database
+    networks:
+      - cloud_network
 
   minio:
     image: elestio/minio:latest
