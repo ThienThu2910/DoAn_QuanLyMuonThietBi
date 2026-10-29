@@ -2,7 +2,11 @@
 
 Đồ án cuối kỳ môn **Điện toán đám mây** — ứng dụng web PHP đóng gói và triển khai bằng **Docker Compose**.
 
-- **Nhóm / thành viên:** _(điền tên nhóm và danh sách thành viên)_
+- **Nhóm / thành viên:**
+- Trương Thiện Thư (leader)
+- Lê Nhật Duy
+- Lê Chí Toàn
+- Dương Hoàng Anh Chương
 
 ## Công nghệ
 
