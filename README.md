@@ -1,12 +1,8 @@
 # Alt F4 Hub — Quản lý mượn thiết bị phòng Lab
 
-Đồ án cuối kỳ môn **Điện toán đám mây** — ứng dụng web PHP đóng gói và triển khai bằng **Docker Compose**.
+Đồ án môn **Điện toán đám mây** — ứng dụng web PHP chạy bằng **Docker Compose** (PHP/Apache + MySQL + MinIO + phpMyAdmin).
 
-- **Nhóm / thành viên:**
-- Trương Thiện Thư (leader)
-- Lê Nhật Duy
-- Lê Chí Toàn
-- Dương Hoàng Anh Chương
+**Nhóm:** Trương Thiện Thư (nhóm trưởng) · Lê Nhật Duy · Lê Chí Toàn · Dương Hoàng Anh Chương
 
 ## Công nghệ
 
@@ -14,63 +10,75 @@
 |---|---|
 | Backend + giao diện | PHP 8.2 (Apache), PDO |
 | Cơ sở dữ liệu | MySQL 8.0 (volume `thietbi_db_data`) |
-| Lưu trữ tệp | MinIO Object Storage (volume `thietbi_minio_data`, bucket `project-files`) |
-| Giao diện | HTML/CSS/JS thuần, Bootstrap Icons, font Be Vietnam Pro |
-| Hạ tầng | Docker Compose, network ảo `thietbi_cloud_net` |
+| Lưu trữ tệp | MinIO, bucket `project-files` (volume `thietbi_minio_data`) |
+| Quản trị CSDL | phpMyAdmin |
+| Hạ tầng | Docker Compose, mạng `thietbi_cloud_net` |
 
-## Yêu cầu môi trường
+## Yêu cầu
 
-Docker Desktop (Windows/macOS) hoặc Docker Engine + Docker Compose. Trên Windows cần bật WSL 2.
+Docker Desktop (Windows/macOS, Windows cần bật WSL 2) hoặc Docker Engine + Docker Compose v2. Máy cần trống các cổng `8080`, `8081`, `3307`, `9000`, `9001`.
 
-## Chạy hệ thống
+## Cài đặt và chạy
+
+**Bước 1 — Khởi động** (tại thư mục chứa `compose.yaml`):
 
 ```bash
 docker compose up -d --build
 ```
 
-| Dịch vụ | Địa chỉ |
-|---|---|
-| Giao diện web | http://localhost:8080 |
-| MinIO Console | http://localhost:9001 (`minioadmin` / `minioadmin123`) |
-| MySQL (từ máy host) | `localhost:3307` |
+Lần đầu MySQL cần khoảng 30–60 giây để khởi tạo. Nếu web báo lỗi kết nối CSDL, hãy đợi rồi tải lại trang.
 
-> Lần đầu chạy: vào MinIO Console, tạo bucket tên **`project-files`** trước khi thử upload.
+**Bước 2 — Tạo bucket MinIO.** Mở http://localhost:9001, đăng nhập `minioadmin` / `minioadmin123`, vào **Buckets → Create Bucket** và tạo bucket tên đúng là `project-files`. Thiếu bước này thì không tải được tệp.
 
-**Tài khoản demo:** `admin@gmail.com` / `admin123` (quản trị) · `student@gmail.com` / `123456` (sinh viên).
-Trang đăng nhập có nút điền nhanh hai tài khoản này.
+**Bước 3 — Đồng bộ CSDL.** Mở http://localhost:8080/setup.php **một lần** để thêm các cột và bảng `borrow_logs` mà `init.sql` chưa có. Thiếu bước này thì duyệt phiếu, nhận trả, sửa thiết bị và báo cáo sẽ lỗi.
+
+**Bước 4 — Đăng nhập** tại http://localhost:8080.
+
+## Địa chỉ và tài khoản
+
+| Dịch vụ | Địa chỉ | Đăng nhập |
+|---|---|---|
+| Web | http://localhost:8080 | `admin@gmail.com` / `admin123` (quản trị); `student@gmail.com` / `123456` (sinh viên) |
+| MinIO Console | http://localhost:9001 | `minioadmin` / `minioadmin123` |
+| phpMyAdmin | http://localhost:8081 | `root` / `rootpassword` |
+| MySQL (từ host) | `localhost:3307` | `root` / `rootpassword`, CSDL `ql_thietbi` |
+
+Tài khoản demo chỉ dùng cho môi trường cục bộ.
+
+## Dừng và xóa dữ liệu
 
 ```bash
-docker compose down        # dừng hệ thống, GIỮ dữ liệu
-docker compose down -v     # dừng và XÓA toàn bộ dữ liệu demo
+docker compose down        # dừng, GIỮ dữ liệu
+docker compose up -d       # chạy lại, dữ liệu vẫn còn
+docker compose down -v     # dừng và XÓA toàn bộ dữ liệu (CSDL + tệp)
 ```
 
-Kiểm chứng dữ liệu bền vững: tạo bản ghi + upload tệp → `docker compose down` → `docker compose up -d` → dữ liệu và tệp vẫn còn.
-**Không** dùng `down -v` trong bước kiểm chứng.
+Kiểm chứng dữ liệu bền vững: tạo phiếu mượn có đính kèm tệp → `docker compose down` → `docker compose up -d` → dữ liệu và tệp vẫn còn. Không dùng `down -v` ở bước này.
 
-## Giao diện Liquid Glass
+## Xử lý sự cố
 
-- Nền cực quang + các tấm kính mờ (mục 15 của `theme.css`); chỉnh độ trong/mờ qua biến `--lg-*`.
-- `login.php` hiện màn hình loading hex ~3 giây (`loader.php`, `assets/loader.css`).
-- Thanh bên có tay nắm thu gọn/mở; khi thu gọn, rê chuột để bung tạm. Trạng thái được nhớ.
-- Trang Kho có phần giới thiệu + lối tắt tới các khu vực (`hero_art.php`).
-- Lỗi chữ kiểu `Quáº£n trá»‹ viÃªn`: `init.sql` nay có `SET NAMES utf8mb4`; dữ liệu cũ trong volume được `encoding_fix.php` tự sửa lần đầu truy cập. Nếu muốn sạch hẳn: `docker compose down -v` rồi `up -d --build`.
+| Hiện tượng | Cách khắc phục |
+|---|---|
+| "Lỗi kết nối cơ sở dữ liệu" | MySQL chưa khởi tạo xong, đợi rồi tải lại; xem `docker compose logs database` |
+| Tải tệp báo lỗi MinIO | Tạo bucket `project-files` (Bước 2) |
+| Lỗi cột/bảng không tồn tại khi duyệt phiếu, sửa thiết bị, báo cáo | Chạy `/setup.php` (Bước 3) |
+| Đăng nhập demo báo sai mật khẩu | Mở http://localhost:8080/reset_pw.php một lần để đặt lại `admin123` và `123456` |
+| Chữ lỗi kiểu `Quáº£n trá»‹ viÃªn` | Dữ liệu cũ được tự sửa lần truy cập đầu; muốn sạch hẳn: `docker compose down -v` rồi `up -d --build` |
+| Cổng bị chiếm | Đổi cổng bên trái trong mục `ports` của `compose.yaml` |
+| Tải tệp lớn bị từ chối | Dùng tệp nhỏ hơn 2 MB |
 
-## Cấu trúc giao diện
-
-Toàn bộ giao diện dùng chung một lớp thiết kế, các trang PHP chỉ chứa nội dung:
+## Cấu trúc thư mục
 
 ```
-src/
-├── head.php            # <head> dùng chung: font, icon, theme.css, theme.js
-├── navbar.php          # khung điều hướng: thanh bên, thanh trên, thanh dưới mobile
-├── ui.php              # hàm hỗ trợ: icon SVG, ngày tiếng Việt, escape
-├── auth_aside.php      # cột thương hiệu của trang đăng nhập / đăng ký
-└── assets/
-    ├── theme.css       # bảng màu (token), sáng/tối, responsive, thành phần
-    └── theme.js        # đổi giao diện, menu mobile, hộp thoại, kiểm tra tệp upload...
+├── compose.yaml      # 4 dịch vụ, volume, network
+├── Dockerfile        # PHP 8.2 + Apache + pdo_mysql
+├── init.sql          # Bảng cơ bản + dữ liệu mẫu
+└── src/              # Mã nguồn PHP (bind mount vào container)
+    ├── admin/        # Dashboard, thiết bị, danh mục, người dùng, duyệt phiếu, báo cáo, xuất CSV
+    ├── assets/       # theme.css, theme.js, loader.css
+    └── setup.php, minio_helper.php, config.php, ...
 ```
 
-- **Sáng / tối:** nút mặt trời/mặt trăng trên thanh trên; lựa chọn được lưu, mặc định theo hệ điều hành.
-- **Đổi bảng màu:** sửa các biến `--t-*` ở đầu `theme.css`.
-- **Phím tắt:** `/` hoặc `Ctrl/⌘ + K` để tìm thiết bị.
-- Thiết kế phản hồi: máy tính (thanh bên cố định), máy tính bảng (menu trượt), điện thoại (menu trượt + thanh điều hướng dưới, bảng dữ liệu dạng thẻ).
+## Lưu ý
+
+Các tệp `setup.php`, `reset_pw.php`, `check_password.php` không yêu cầu đăng nhập và mật khẩu mặc định được ghi sẵn trong `compose.yaml`, nên chỉ phù hợp môi trường demo cục bộ.
