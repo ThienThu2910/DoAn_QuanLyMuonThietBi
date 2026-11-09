@@ -2,11 +2,7 @@
 
 Đồ án môn **Điện toán đám mây** — ứng dụng web PHP chạy bằng **Docker Compose** (PHP/Apache + MySQL + MinIO + phpMyAdmin).
 
-**Nhóm: Alt F4**
-- Trưởng nhóm: Trương Thiên Thư - 24210501050
-- Lê Nhật Duy - 24210501005
-- Lê Chí Toàn - 24210501038
-- Dương Hoàng Anh Chương - 24210501001
+nhóm trưởng 
 
 ## Công nghệ
 
