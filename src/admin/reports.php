@@ -2,6 +2,12 @@
 require_once '../config.php';
 checkAdmin();
 
+// Tự bổ sung cột trạng thái nếu CSDL cũ chưa được đồng bộ qua setup.php.
+$statusColumn = $pdo->query("SHOW COLUMNS FROM devices LIKE 'status'")->fetch();
+if (!$statusColumn) {
+    $pdo->exec("ALTER TABLE devices ADD COLUMN status ENUM('good', 'maintenance', 'broken', 'decommissioned') DEFAULT 'good'");
+}
+
 // 1. Thống kê theo danh mục
 $categoryStats = $pdo->query("
     SELECT c.name, COUNT(b.id) as borrow_count 
