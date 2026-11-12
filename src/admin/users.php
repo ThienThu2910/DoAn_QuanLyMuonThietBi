@@ -16,10 +16,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (empty($fullname) || empty($email) || empty($password)) {
         $err = "Vui lòng nhập đầy đủ họ tên, email và mật khẩu.";
     } else {
-        $hash = password_hash($password, PASSWORD_BCRYPT);
         try {
-            $pdo->prepare("INSERT INTO users (fullname, student_code, email, password_hash, role) VALUES (?, ?, ?, ?, ?)")
-                ->execute([$fullname, !empty($student_code) ? $student_code : null, $email, $hash, $role]);
+            $pdo->prepare("INSERT INTO users (fullname, student_code, email, password, role) VALUES (?, ?, ?, ?, ?)")
+                ->execute([$fullname, !empty($student_code) ? $student_code : null, $email, $password, $role]);
             $msg = "Đã tạo tài khoản mới thành công!";
         } catch (Exception $e) {
             $err = "Email hoặc mã SV đã tồn tại trên hệ thống!";
@@ -40,8 +39,7 @@ if (isset($_GET['make_student'])) {
 }
 if (isset($_GET['reset_pass'])) {
     $uid = (int)$_GET['reset_pass'];
-    $newHash = password_hash('123456', PASSWORD_BCRYPT);
-    $pdo->prepare("UPDATE users SET password_hash = ? WHERE id = ?")->execute([$newHash, $uid]);
+    $pdo->prepare("UPDATE users SET password = ? WHERE id = ?")->execute(['123456', $uid]);
     $msg = "Đã đặt lại mật khẩu người dùng về mặc định: 123456";
 }
 

@@ -11,20 +11,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $new_pass     = $_POST['new_password'] ?? '';
     $confirm_pass = $_POST['confirm_password'] ?? '';
 
-    // Lấy mật khẩu hash hiện tại từ DB
-    $stmt = $pdo->prepare("SELECT password_hash FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT password FROM users WHERE id = ?");
     $stmt->execute([$user['id']]);
-    $currentHash = $stmt->fetchColumn();
+    $currentPassword = $stmt->fetchColumn();
 
-    if (!password_verify($current_pass, $currentHash)) {
+    if ($current_pass !== $currentPassword) {
         $err = "Mật khẩu hiện tại không chính xác!";
     } elseif (strlen($new_pass) < 6) {
         $err = "Mật khẩu mới phải có ít nhất 6 ký tự!";
     } elseif ($new_pass !== $confirm_pass) {
         $err = "Mật khẩu xác nhận không khớp!";
     } else {
-        $newHash = password_hash($new_pass, PASSWORD_BCRYPT);
-        $pdo->prepare("UPDATE users SET password_hash = ? WHERE id = ?")->execute([$newHash, $user['id']]);
+        $pdo->prepare("UPDATE users SET password = ? WHERE id = ?")->execute([$new_pass, $user['id']]);
         $msg = "Đổi mật khẩu thành công!";
     }
 }

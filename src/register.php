@@ -33,13 +33,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($stmt->fetch()) {
             $error = "Email hoặc mã sinh viên này đã được đăng ký trên hệ thống!";
         } else {
-            // Băm mật khẩu an toàn và lưu vào cơ sở dữ liệu
-            $passwordHash = password_hash($password, PASSWORD_BCRYPT);
             $role = 'student'; // Mặc định tài khoản đăng ký mới là sinh viên
 
             try {
-                $insert = $pdo->prepare("INSERT INTO users (fullname, student_code, email, password_hash, role) VALUES (?, ?, ?, ?, ?)");
-                $insert->execute([$fullname, !empty($student_code) ? $student_code : null, $email, $passwordHash, $role]);
+                $insert = $pdo->prepare("INSERT INTO users (fullname, student_code, email, password, role) VALUES (?, ?, ?, ?, ?)");
+                $insert->execute([$fullname, !empty($student_code) ? $student_code : null, $email, $password, $role]);
                 $success = "Đăng ký tài khoản thành công! Bạn có thể đăng nhập ngay bây giờ.";
             } catch (Exception $e) {
                 $error = "Lỗi hệ thống: " . $e->getMessage();

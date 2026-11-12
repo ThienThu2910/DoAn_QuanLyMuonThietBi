@@ -2,6 +2,15 @@
 require_once 'config.php';
 
 try {
+    // Chuyển schema cũ sang cột password dạng văn bản cho bản demo.
+    $userCols = $pdo->query("SHOW COLUMNS FROM users")->fetchAll(PDO::FETCH_COLUMN);
+    if (in_array('password_hash', $userCols) && !in_array('password', $userCols)) {
+        $pdo->exec("ALTER TABLE users CHANGE password_hash password VARCHAR(255) NOT NULL");
+    }
+    // Đặt lại tài khoản demo mỗi lần chạy để bảo đảm thông tin trong trang đăng nhập đúng.
+    $pdo->exec("UPDATE users SET password = 'admin123' WHERE email = 'admin@gmail.com'");
+    $pdo->exec("UPDATE users SET password = '123456' WHERE email = 'student@gmail.com'");
+
     // 1. Bổ sung cột cho bảng devices
     $deviceCols = $pdo->query("SHOW COLUMNS FROM devices")->fetchAll(PDO::FETCH_COLUMN);
     if (!in_array('location', $deviceCols)) {

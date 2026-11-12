@@ -37,7 +37,7 @@ Lần đầu MySQL cần khoảng 30–60 giây để khởi tạo. Nếu web b�
 
 **Bước 2 — Tạo bucket MinIO.** Mở http://localhost:9001, đăng nhập `minioadmin` / `minioadmin123`, vào **Buckets → Create Bucket** và tạo bucket tên đúng là `project-files`. Thiếu bước này thì không tải được tệp.
 
-**Bước 3 — Đồng bộ CSDL.** Mở http://localhost:8080/setup.php **một lần** để thêm các cột và bảng `borrow_logs` mà `init.sql` chưa có. Thiếu bước này thì duyệt phiếu, nhận trả, sửa thiết bị và báo cáo sẽ lỗi.
+**Bước 3 — Đồng bộ CSDL.** Mở http://localhost:8080/setup.php **một lần** để cập nhật schema (bao gồm chuyển cột mật khẩu sang `password`) và thêm các cột/bảng `borrow_logs` mà `init.sql` chưa có. Với CSDL cũ dùng hash, setup sẽ đặt lại tài khoản demo thành `admin123` và `123456`; mật khẩu các tài khoản khác không thể khôi phục từ hash.
 
 **Bước 4 — Đăng nhập** tại http://localhost:8080.
 
@@ -88,4 +88,4 @@ Kiểm chứng dữ liệu bền vững: tạo phiếu mượn có đính kèm t
 
 ## Lưu ý
 
-Các tệp `setup.php`, `reset_pw.php`, `check_password.php` không yêu cầu đăng nhập và mật khẩu mặc định được ghi sẵn trong `compose.yaml`, nên chỉ phù hợp môi trường demo cục bộ.
+Mật khẩu người dùng được lưu trực tiếp dưới dạng văn bản thuần để tiện demo; không dùng cấu hình này cho dữ liệu thật hoặc triển khai công khai. Các tệp `setup.php`, `reset_pw.php`, `check_password.php` không yêu cầu đăng nhập và mật khẩu mặc định được ghi sẵn trong `compose.yaml`, nên chỉ phù hợp môi trường demo cục bộ.

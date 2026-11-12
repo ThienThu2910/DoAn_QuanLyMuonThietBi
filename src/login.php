@@ -10,7 +10,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->execute([$email]);
     $user = $stmt->fetch();
 
-    if ($user && password_verify($password, $user['password_hash'])) {
+    // Hỗ trợ CSDL cũ trong lúc chưa chạy setup.php để đổi password_hash thành password.
+    $passwordMatches = false;
+    if ($user && isset($user['password'])) {
+        $passwordMatches = ($password === $user['password']);
+    } elseif ($user && isset($user['password_hash'])) {
+        $passwordMatches = password_verify($password, $user['password_hash']);
+    }
+
+    if ($user && $passwordMatches) {
         $_SESSION['user'] = $user;
         if ($user['role'] === 'admin') {
             header("Location: /admin/index.php");

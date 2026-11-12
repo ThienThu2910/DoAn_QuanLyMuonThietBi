@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     fullname VARCHAR(100) NOT NULL,
     student_code VARCHAR(20) UNIQUE,
     email VARCHAR(100) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
     role ENUM('admin', 'student') DEFAULT 'student',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -66,9 +66,9 @@ CREATE TABLE IF NOT EXISTS file_metadata (
 );
 
 -- Dữ liệu ban đầu
-INSERT INTO users (fullname, student_code, email, password_hash, role) VALUES 
-('Quản trị viên', 'ADMIN01', 'admin@gmail.com', '$2y$10$wT2rYw51vYxYcI4YV8tUheDqgE6bZt71c3L8C.mNq9iV8s67fB5S.', 'admin'),
-('Nguyễn Văn Sinh Viên', 'SV001', 'student@gmail.com', '$2y$10$tZ26dZ9uA2oZqU/H8zBqle9QkI7k4R7V41G6S0rB.L4sB7F.C.HSu', 'student');
+INSERT INTO users (fullname, student_code, email, password, role) VALUES 
+('Quản trị viên', 'ADMIN01', 'admin@gmail.com', 'admin123', 'admin'),
+('Nguyễn Văn Sinh Viên', 'SV001', 'student@gmail.com', '123456', 'student');
 
 INSERT INTO categories (name, description) VALUES 
 ('Máy chiếu & Phụ kiện', 'Thiết bị trình chiếu phòng họp/giảng đường'),
