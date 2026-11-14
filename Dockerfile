@@ -1,7 +1,10 @@
 FROM php:8.2-apache
 
-# Cài đặt extension PDO MySQL
-RUN docker-php-ext-install pdo pdo_mysql
+# MinIO client dùng cURL; ứng dụng dùng PDO MySQL.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libcurl4-openssl-dev \
+    && docker-php-ext-install pdo pdo_mysql curl fileinfo \
+    && rm -rf /var/lib/apt/lists/*
 
 # Bật rewrite module cho Apache
 RUN a2enmod rewrite

@@ -12,6 +12,23 @@ if (empty($key)) {
     die("Thiếu khóa tệp hợp lệ.");
 }
 
+// Chỉ proxy object đang gắn với thiết bị hoặc phiếu mượn mà người dùng có quyền xem.
+$deviceFile = $pdo->prepare('SELECT 1 FROM devices WHERE image_key = ? OR manual_doc_key = ? LIMIT 1');
+$deviceFile->execute([$key, $key]);
+$canRead = (bool)$deviceFile->fetchColumn();
+if (!$canRead) {
+    $borrowFile = $pdo->prepare('SELECT user_id FROM borrow_requests WHERE handover_doc_key = ? LIMIT 1');
+    $borrowFile->execute([$key]);
+    $ownerId = $borrowFile->fetchColumn();
+    $canRead = $ownerId !== false && (
+        $_SESSION['user']['role'] === 'admin' || (int)$ownerId === (int)$_SESSION['user']['id']
+    );
+}
+if (!$canRead) {
+    http_response_code(404);
+    exit('Không tìm thấy tệp tin.');
+}
+
 // 2. Kiểm tra bộ nhớ đệm trình duyệt (HTTP 304 Not Modified)
 $etag = '"' . md5($key) . '"';
 if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim($_SERVER['HTTP_IF_NONE_MATCH']) === $etag) {
@@ -31,7 +48,8 @@ if (!$file) {
 header("Content-Type: " . $file['content_type']);
 header("Content-Length: " . strlen($file['body']));
 header("ETag: " . $etag);
-header("Cache-Control: public, max-age=604800, immutable");
+header("Cache-Control: private, max-age=3600, immutable");
+header('X-Content-Type-Options: nosniff');
 header("Content-Disposition: inline; filename=\"" . basename($key) . "\"");
 
 echo $file['body'];

@@ -39,8 +39,16 @@ $sql = "
 ";
 $stmt = $pdo->query($sql);
 
+$safeCsvCell = static function ($value): string {
+    $value = (string)($value ?? '');
+    if (preg_match('/^[\x00-\x20]*[=+@\-]/u', $value)) {
+        return "'" . $value;
+    }
+    return $value;
+};
+
 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-    fputcsv($output, [
+    fputcsv($output, array_map($safeCsvCell, [
         $row['id'],
         $row['fullname'],
         $row['student_code'],
@@ -54,7 +62,7 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         strtoupper($row['status']),
         $row['return_condition'],
         $row['notes']
-    ]);
+    ]));
 }
 
 fclose($output);

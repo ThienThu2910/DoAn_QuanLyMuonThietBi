@@ -20,6 +20,7 @@ if (!$device) {
 $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM borrow_requests WHERE device_id = ? AND status IN ('approved', 'returned')");
 $stmtCount->execute([$id]);
 $borrowTurnCount = $stmtCount->fetchColumn();
+$canBorrow = (int)$device['available_qty'] > 0 && ($device['status'] ?? 'good') === 'good';
 ?>
 <!DOCTYPE html>
 <html lang="vi">
@@ -141,14 +142,14 @@ $borrowTurnCount = $stmtCount->fetchColumn();
             </div>
 
             <div style="display: flex; gap: 15px; align-items: center;">
-                <?php if ($device['available_qty'] > 0): ?>
+                <?php if ($canBorrow): ?>
                     <a href="/borrow.php?device_id=<?= $device['id'] ?>" class="btn-borrow-now">
                         <i class="bi <?= $_SESSION['user']['role'] === 'admin' ? 'bi-person-plus' : 'bi-journal-plus' ?> me-1"></i>
                         <?= $_SESSION['user']['role'] === 'admin' ? 'Ghi Nhận Bàn Giao Cho Sinh Viên' : 'Đăng Ký Mượn Thiết Bị Này' ?>
                     </a>
                 <?php else: ?>
                     <button class="btn-borrow-now" style="opacity: 0.5; cursor: not-allowed;" disabled>
-                        Tạm Hết Thiết Bị
+                        <?= (int)$device['available_qty'] > 0 ? 'Đang Bảo Trì / Chưa Sẵn Sàng' : 'Tạm Hết Thiết Bị' ?>
                     </button>
                 <?php endif; ?>
             </div>

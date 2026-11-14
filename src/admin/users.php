@@ -6,41 +6,42 @@ $msg = '';
 $err = '';
 
 // 1. Thêm người dùng mới
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add') {
-    $fullname = trim($_POST['fullname']);
-    $student_code = trim($_POST['student_code']);
-    $email = trim($_POST['email']);
-    $role = $_POST['role'];
-    $password = $_POST['password'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    app_require_csrf();
+    $action = $_POST['action'] ?? '';
+    $uid = filter_var($_POST['user_id'] ?? null, FILTER_VALIDATE_INT) ?: 0;
+    if ($action === 'add') {
+        $fullname = trim(app_post_string('fullname'));
+        $student_code = trim(app_post_string('student_code'));
+        $email = trim(app_post_string('email'));
+        $role = app_post_string('role') === 'admin' ? 'admin' : 'student';
+        $password = app_post_string('password');
 
-    if (empty($fullname) || empty($email) || empty($password)) {
-        $err = "Vui lòng nhập đầy đủ họ tên, email và mật khẩu.";
-    } else {
-        try {
-            $pdo->prepare("INSERT INTO users (fullname, student_code, email, password, role) VALUES (?, ?, ?, ?, ?)")
-                ->execute([$fullname, !empty($student_code) ? $student_code : null, $email, $password, $role]);
-            $msg = "Đã tạo tài khoản mới thành công!";
-        } catch (Exception $e) {
-            $err = "Email hoặc mã SV đã tồn tại trên hệ thống!";
+        if (empty($fullname) || empty($email) || empty($password)) {
+            $err = "Vui lòng nhập đầy đủ họ tên, email và mật khẩu.";
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 6) {
+            $err = 'Email không hợp lệ hoặc mật khẩu phải có ít nhất 6 ký tự.';
+        } else {
+            try {
+                $pdo->prepare("INSERT INTO users (fullname, student_code, email, password, role) VALUES (?, ?, ?, ?, ?)")
+                    ->execute([$fullname, !empty($student_code) ? $student_code : null, $email, app_password_hash($password), $role]);
+                $msg = "Đã tạo tài khoản mới thành công!";
+            } catch (Exception $e) {
+                $err = "Email hoặc mã SV đã tồn tại trên hệ thống!";
+            }
         }
+    } elseif ($action === 'make_admin' || $action === 'make_student') {
+        if ($uid === (int)$_SESSION['user']['id'] && $action === 'make_student') {
+            $err = 'Bạn không thể tự hạ quyền tài khoản đang đăng nhập.';
+        } else {
+            $role = $action === 'make_admin' ? 'admin' : 'student';
+            $pdo->prepare('UPDATE users SET role = ? WHERE id = ?')->execute([$role, $uid]);
+            $msg = $role === 'admin' ? 'Đã cấp quyền quản trị viên.' : 'Đã chuyển tài khoản về quyền sinh viên.';
+        }
+    } elseif ($action === 'reset_pass') {
+        $pdo->prepare('UPDATE users SET password = ? WHERE id = ?')->execute([app_password_hash('123456'), $uid]);
+        $msg = 'Đã đặt mật khẩu mới về giá trị mặc định 123456.';
     }
-}
-
-// 2. Đổi quyền hoặc reset mật khẩu
-if (isset($_GET['make_admin'])) {
-    $uid = (int)$_GET['make_admin'];
-    $pdo->prepare("UPDATE users SET role = 'admin' WHERE id = ?")->execute([$uid]);
-    $msg = "Đã cấp quyền Quản trị viên!";
-}
-if (isset($_GET['make_student'])) {
-    $uid = (int)$_GET['make_student'];
-    $pdo->prepare("UPDATE users SET role = 'student' WHERE id = ?")->execute([$uid]);
-    $msg = "Đã chuyển về quyền Sinh viên.";
-}
-if (isset($_GET['reset_pass'])) {
-    $uid = (int)$_GET['reset_pass'];
-    $pdo->prepare("UPDATE users SET password = ? WHERE id = ?")->execute(['123456', $uid]);
-    $msg = "Đã đặt lại mật khẩu người dùng về mặc định: 123456";
 }
 
 $users = $pdo->query("SELECT * FROM users ORDER BY id DESC")->fetchAll();
@@ -88,6 +89,7 @@ $users = $pdo->query("SELECT * FROM users ORDER BY id DESC")->fetchAll();
     <div class="glass-box">
         <h3 style="margin-top: 0; font-size: 1.15rem; font-weight: 700; margin-bottom: 15px;">+ Thêm Tài Khoản Mới</h3>
         <form method="POST" style="display: grid; grid-template-columns: repeat(4, 1fr) 1fr auto; gap: 12px; align-items: end;">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="action" value="add">
             <div>
                 <label style="font-size: 0.82rem; font-weight: 600;">Họ và tên</label>
@@ -143,11 +145,20 @@ $users = $pdo->query("SELECT * FROM users ORDER BY id DESC")->fetchAll();
                         </td>
                         <td>
                             <?php if ($u['role'] === 'student'): ?>
-                                <a href="?make_admin=<?= $u['id'] ?>" class="btn-sm" style="background: #FEF3C7; color: #92400E;" onclick="return confirm('Nâng cấp tài khoản này lên Quản trị viên?')">Lên Admin</a>
+                                <form method="POST" style="display:inline" onsubmit="return confirm('Nâng cấp tài khoản này lên Quản trị viên?')">
+                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>"><input type="hidden" name="action" value="make_admin"><input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
+                                    <button type="submit" class="btn-sm" style="border:0;cursor:pointer;background: #FEF3C7; color: #92400E;">Lên Admin</button>
+                                </form>
                             <?php else: ?>
-                                <a href="?make_student=<?= $u['id'] ?>" class="btn-sm" style="background: #E2E8F0; color: #334155;" onclick="return confirm('Chuyển tài khoản về quyền Sinh viên?')">Về SV</a>
+                                <form method="POST" style="display:inline" onsubmit="return confirm('Chuyển tài khoản về quyền Sinh viên?')">
+                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>"><input type="hidden" name="action" value="make_student"><input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
+                                    <button type="submit" class="btn-sm" style="border:0;cursor:pointer;background: #E2E8F0; color: #334155;">Về SV</button>
+                                </form>
                             <?php endif; ?>
-                            <a href="?reset_pass=<?= $u['id'] ?>" class="btn-sm" style="background: #FEE2E2; color: #DC2626;" onclick="return confirm('Đặt lại mật khẩu về 123456?')">Reset Pass</a>
+                            <form method="POST" style="display:inline" onsubmit="return confirm('Đặt lại mật khẩu về 123456?')">
+                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>"><input type="hidden" name="action" value="reset_pass"><input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
+                                <button type="submit" class="btn-sm" style="border:0;cursor:pointer;background: #FEE2E2; color: #DC2626;">Reset Pass</button>
+                            </form>
                         </td>
                     </tr>
                 <?php endforeach; ?>

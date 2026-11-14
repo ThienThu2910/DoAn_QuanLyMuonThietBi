@@ -202,7 +202,7 @@ html[data-theme] body.has-shell { padding-left: var(--t-side); }
 .t-me-text { min-width: 0; }
 .t-me-text b, .t-user-text b { display: block; font-size: 12.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .t-me-text small, .t-user-text small { display: block; font-size: 11px; color: var(--t-muted); }
-.t-me-out { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: var(--t-muted); transition: background-color .18s, color .18s; }
+.t-me-out { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 9px; color: var(--t-muted); transition: background-color .18s, color .18s; }
 .t-me-out:hover { background: var(--t-bad-bg); color: var(--t-bad); }
 .t-avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; background: var(--t-brand-soft); color: var(--t-brand-text); font-size: 12px; font-weight: 750; border: 2px solid var(--t-surface); box-shadow: 0 0 0 1px var(--t-brand-line); }
 .t-side-foot { display: flex; align-items: center; gap: 8px; padding: 14px 8px 16px; font-size: 11px; color: var(--t-muted); white-space: nowrap; }

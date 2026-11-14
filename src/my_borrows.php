@@ -3,8 +3,9 @@ require_once 'config.php';
 checkLogin();
 
 // Xử lý sinh viên hủy phiếu mượn khi còn chờ duyệt
-if (isset($_GET['cancel_id'])) {
-    $cancelId = (int)$_GET['cancel_id'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cancel') {
+    app_require_csrf();
+    $cancelId = (int)($_POST['cancel_id'] ?? 0);
     $stmtCancel = $pdo->prepare("
         UPDATE borrow_requests 
         SET status = 'rejected', 
@@ -491,9 +492,10 @@ foreach ($requests as $r) {
                                         <i class="bi bi-eye"></i> Chi tiết
                                     </a>
                                     <?php if ($r['status'] === 'pending'): ?>
-                                        <a href="?cancel_id=<?= $r['id'] ?>" class="btn-cancel-pill" onclick="return confirm('Bạn có chắc chắn muốn hủy yêu cầu mượn thiết bị này?')">
-                                            <i class="bi bi-x-circle"></i> Hủy
-                                        </a>
+                                        <form method="POST" style="display:inline" onsubmit="return confirm('Bạn có chắc chắn muốn hủy yêu cầu mượn thiết bị này?')">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>"><input type="hidden" name="action" value="cancel"><input type="hidden" name="cancel_id" value="<?= (int)$r['id'] ?>">
+                                            <button type="submit" class="btn-cancel-pill"><i class="bi bi-x-circle"></i> Hủy</button>
+                                        </form>
                                     <?php endif; ?>
                                 </div>
                             </td>

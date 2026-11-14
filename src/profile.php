@@ -7,22 +7,23 @@ $msg = '';
 $err = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $current_pass = $_POST['current_password'] ?? '';
-    $new_pass     = $_POST['new_password'] ?? '';
-    $confirm_pass = $_POST['confirm_password'] ?? '';
+    app_require_csrf();
+    $current_pass = app_post_string('current_password');
+    $new_pass     = app_post_string('new_password');
+    $confirm_pass = app_post_string('confirm_password');
 
     $stmt = $pdo->prepare("SELECT password FROM users WHERE id = ?");
     $stmt->execute([$user['id']]);
     $currentPassword = $stmt->fetchColumn();
 
-    if ($current_pass !== $currentPassword) {
+    if (!app_password_matches($current_pass, (string)$currentPassword)) {
         $err = "Mật khẩu hiện tại không chính xác!";
     } elseif (strlen($new_pass) < 6) {
         $err = "Mật khẩu mới phải có ít nhất 6 ký tự!";
     } elseif ($new_pass !== $confirm_pass) {
         $err = "Mật khẩu xác nhận không khớp!";
     } else {
-        $pdo->prepare("UPDATE users SET password = ? WHERE id = ?")->execute([$new_pass, $user['id']]);
+        $pdo->prepare("UPDATE users SET password = ? WHERE id = ?")->execute([app_password_hash($new_pass), $user['id']]);
         $msg = "Đổi mật khẩu thành công!";
     }
 }
@@ -92,6 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="glass-box">
         <h3 style="margin-top: 0; font-size: 1.2rem; font-weight: 700; margin-bottom: 18px;">Đổi Mật Khẩu</h3>
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
             <label style="font-size: 0.85rem; font-weight: 600;">Mật khẩu hiện tại</label>
             <input type="password" name="current_password" class="form-control" placeholder="••••••••" required>
 

@@ -21,60 +21,103 @@ $err = '';
 $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $catId    = (int)$_POST['category_id'];
-    $code     = trim($_POST['code']);
-    $name     = trim($_POST['name']);
-    $quantity = (int)$_POST['quantity'];
-    $location = trim($_POST['location']);
-    $status   = $_POST['status'];
-    $desc     = trim($_POST['description']);
+    app_require_csrf();
+    $catId    = filter_var($_POST['category_id'] ?? null, FILTER_VALIDATE_INT) ?: 0;
+    $code     = trim(app_post_string('code'));
+    $name     = trim(app_post_string('name'));
+    $quantity = filter_var($_POST['quantity'] ?? null, FILTER_VALIDATE_INT) ?: 0;
+    $location = trim(app_post_string('location'));
+    $status   = app_post_string('status');
+    $desc     = trim(app_post_string('description'));
 
-    // Tính lại available_qty nếu tổng số lượng thay đổi
-    $diffQty = $quantity - $device['quantity'];
-    $newAvailable = max(0, $device['available_qty'] + $diffQty);
+    if ($code === '' || $name === '' || $quantity < 1) {
+        $err = 'Nhập mã, tên và tổng số lượng hợp lệ.';
+    } elseif (!in_array($status, ['good', 'maintenance', 'broken', 'decommissioned'], true)) {
+        $err = 'Trạng thái thiết bị không hợp lệ.';
+    } else {
+        $categoryCheck = $pdo->prepare('SELECT 1 FROM categories WHERE id = ?');
+        $categoryCheck->execute([$catId]);
+        if (!$categoryCheck->fetchColumn()) $err = 'Vui lòng chọn danh mục hợp lệ.';
+    }
 
     $imageKey  = $device['image_key'];
     $manualKey = $device['manual_doc_key'];
+    $newObjectKeys = [];
+    $newFileMetadata = [];
 
     // 1. Upload ảnh mới nếu có
-    if (isset($_FILES['device_image']) && $_FILES['device_image']['error'] === UPLOAD_ERR_OK) {
-        $tmpFile = $_FILES['device_image']['tmp_name'];
+    if (!$err && isset($_FILES['device_image'])) {
+        $upload = minio_validate_uploaded_file($_FILES['device_image'], ['jpg'=>'image/jpeg','jpeg'=>'image/jpeg','png'=>'image/png','webp'=>'image/webp'], 5 * 1024 * 1024);
         $ext = strtolower(pathinfo($_FILES['device_image']['name'], PATHINFO_EXTENSION));
-        if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
-            $newImgKey = "devices/" . uniqid('dev_') . "." . $ext;
+        if (!$upload['valid']) {
+            $err = $upload['error'];
+        } elseif ($upload['mime'] !== null) {
+            $newImgKey = 'devices/' . bin2hex(random_bytes(16)) . '.' . $ext;
             $minio = new MinioClient();
-            if ($minio->uploadObject($newImgKey, file_get_contents($tmpFile), mime_content_type($tmpFile))) {
+            if ($minio->uploadObject($newImgKey, file_get_contents($_FILES['device_image']['tmp_name']), $upload['mime'])) {
                 $imageKey = $newImgKey;
+                $newObjectKeys[] = $newImgKey;
+                $newFileMetadata[] = [$_FILES['device_image']['name'], $newImgKey, $upload['mime'], (int)$_FILES['device_image']['size']];
+            } else {
+                $err = 'Không thể lưu ảnh lên MinIO. Vui lòng kiểm tra dịch vụ lưu trữ.';
             }
         }
     }
 
     // 2. Upload tài liệu hướng dẫn PDF nếu có
-    if (isset($_FILES['manual_doc']) && $_FILES['manual_doc']['error'] === UPLOAD_ERR_OK) {
-        $tmpDoc = $_FILES['manual_doc']['tmp_name'];
-        $extDoc = strtolower(pathinfo($_FILES['manual_doc']['name'], PATHINFO_EXTENSION));
-        if ($extDoc === 'pdf') {
-            $newDocKey = "manuals/" . uniqid('manual_') . ".pdf";
+    if (!$err && isset($_FILES['manual_doc'])) {
+        $upload = minio_validate_uploaded_file($_FILES['manual_doc'], ['pdf'=>'application/pdf'], 10 * 1024 * 1024);
+        if (!$upload['valid']) {
+            $err = $upload['error'];
+        } elseif ($upload['mime'] !== null) {
+            $newDocKey = 'manuals/' . bin2hex(random_bytes(16)) . '.pdf';
             $minio = new MinioClient();
-            if ($minio->uploadObject($newDocKey, file_get_contents($tmpDoc), 'application/pdf')) {
+            if ($minio->uploadObject($newDocKey, file_get_contents($_FILES['manual_doc']['tmp_name']), 'application/pdf')) {
                 $manualKey = $newDocKey;
+                $newObjectKeys[] = $newDocKey;
+                $newFileMetadata[] = [$_FILES['manual_doc']['name'], $newDocKey, 'application/pdf', (int)$_FILES['manual_doc']['size']];
+            } else {
+                $err = 'Không thể lưu tài liệu lên MinIO. Vui lòng kiểm tra dịch vụ lưu trữ.';
             }
         }
     }
 
-    try {
-        $update = $pdo->prepare("
-            UPDATE devices 
-            SET category_id = ?, code = ?, name = ?, quantity = ?, available_qty = ?, location = ?, status = ?, description = ?, image_key = ?, manual_doc_key = ?
-            WHERE id = ?
-        ");
-        $update->execute([$catId, $code, $name, $quantity, $newAvailable, $location, $status, $desc, $imageKey, $manualKey, $id]);
-        $returnPath = strtok($returnTo, '#');
-        $returnHash = parse_url($returnTo, PHP_URL_FRAGMENT);
-        header("Location: " . $returnPath . "?msg=" . urlencode("Cập nhật thông tin thiết bị thành công!") . ($returnHash ? "#" . $returnHash : ""));
-        exit;
-    } catch (Exception $e) {
-        $err = "Lỗi cập nhật: " . $e->getMessage();
+    if ($err && $newObjectKeys) {
+        foreach ($newObjectKeys as $objectKey) (new MinioClient())->deleteObject($objectKey);
+    }
+    if (!$err) {
+        try {
+            $pdo->beginTransaction();
+            $stock = $pdo->prepare('SELECT quantity, available_qty FROM devices WHERE id = ? FOR UPDATE');
+            $stock->execute([$id]);
+            $currentStock = $stock->fetch();
+            if (!$currentStock) throw new RuntimeException('Thiết bị không còn tồn tại.');
+            $checkedOut = max(0, (int)$currentStock['quantity'] - (int)$currentStock['available_qty']);
+            if ($quantity < $checkedOut) {
+                throw new RuntimeException("Tổng số lượng không thể thấp hơn {$checkedOut} thiết bị đang được mượn.");
+            }
+            $newAvailable = $quantity - $checkedOut;
+            $update = $pdo->prepare("
+                UPDATE devices
+                SET category_id = ?, code = ?, name = ?, quantity = ?, available_qty = ?, location = ?, status = ?, description = ?, image_key = ?, manual_doc_key = ?
+                WHERE id = ?
+            ");
+            $update->execute([$catId, $code, $name, $quantity, $newAvailable, $location, $status, $desc, $imageKey, $manualKey, $id]);
+            if ($newFileMetadata) {
+                $saveMetadata = $pdo->prepare("INSERT INTO file_metadata (original_name, object_key, file_type, file_size, entity_id, entity_type) VALUES (?, ?, ?, ?, ?, 'device')");
+                foreach ($newFileMetadata as $metadata) $saveMetadata->execute([...$metadata, $id]);
+            }
+            $pdo->commit();
+            $returnPath = strtok($returnTo, '#');
+            $returnHash = parse_url($returnTo, PHP_URL_FRAGMENT);
+            header("Location: " . $returnPath . "?msg=" . urlencode("Cập nhật thông tin thiết bị thành công!") . ($returnHash ? "#" . $returnHash : ""));
+            exit;
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            foreach ($newObjectKeys as $objectKey) (new MinioClient())->deleteObject($objectKey);
+            error_log('Device update failed: ' . $e->getMessage());
+            $err = $e instanceof RuntimeException ? $e->getMessage() : 'Không thể cập nhật thiết bị. Hãy kiểm tra dữ liệu và thử lại.';
+        }
     }
 }
 ?>
@@ -123,6 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <div class="glass-box">
         <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
             <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 18px;">
                 <div>
                     <label style="font-size: 0.85rem; font-weight: 600;">Mã thiết bị</label>

@@ -31,9 +31,12 @@ CREATE TABLE IF NOT EXISTS devices (
     name VARCHAR(150) NOT NULL,
     quantity INT NOT NULL DEFAULT 0,
     available_qty INT NOT NULL DEFAULT 0,
+    location VARCHAR(255) NOT NULL DEFAULT 'Phòng Lab CNTT',
+    status ENUM('good', 'maintenance', 'broken', 'decommissioned') NOT NULL DEFAULT 'good',
     description TEXT,
     image_key VARCHAR(255) NULL,
-    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+    manual_doc_key VARCHAR(255) NULL,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT
 );
 
 -- 4. Bảng Phiếu mượn thiết bị
@@ -47,10 +50,15 @@ CREATE TABLE IF NOT EXISTS borrow_requests (
     actual_return_date DATE NULL,
     status ENUM('pending', 'approved', 'rejected', 'returned') DEFAULT 'pending',
     handover_doc_key VARCHAR(255) NULL,
+    handover_by INT NULL,
+    handover_at DATETIME NULL,
+    reject_reason TEXT NULL,
+    return_condition ENUM('good', 'damaged', 'lost', 'incomplete') NOT NULL DEFAULT 'good',
+    return_note TEXT NULL,
     note TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+    FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE RESTRICT
 );
 
 -- 5. Bảng Metadata tệp MinIO (Mục 4.2 đề bài)
@@ -65,20 +73,30 @@ CREATE TABLE IF NOT EXISTS file_metadata (
     entity_type VARCHAR(50) NULL
 );
 
+-- 6. Nhật ký thao tác phiếu mượn
+CREATE TABLE IF NOT EXISTS borrow_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    request_id INT NOT NULL,
+    actor_id INT NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    note TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Dữ liệu ban đầu
 INSERT INTO users (fullname, student_code, email, password, role) VALUES 
-('Quản trị viên', 'ADMIN01', 'admin@gmail.com', 'admin123', 'admin'),
-('Nguyễn Văn Sinh Viên', 'SV001', 'student@gmail.com', '123456', 'student'),
-('Sinh viên thử nghiệm 01', 'SVTEST001', 'student.test01@example.com', '123456', 'student'),
-('Sinh viên thử nghiệm 02', 'SVTEST002', 'student.test02@example.com', '123456', 'student'),
-('Sinh viên thử nghiệm 03', 'SVTEST003', 'student.test03@example.com', '123456', 'student'),
-('Sinh viên thử nghiệm 04', 'SVTEST004', 'student.test04@example.com', '123456', 'student'),
-('Sinh viên thử nghiệm 05', 'SVTEST005', 'student.test05@example.com', '123456', 'student'),
-('Sinh viên thử nghiệm 06', 'SVTEST006', 'student.test06@example.com', '123456', 'student'),
-('Sinh viên thử nghiệm 07', 'SVTEST007', 'student.test07@example.com', '123456', 'student'),
-('Sinh viên thử nghiệm 08', 'SVTEST008', 'student.test08@example.com', '123456', 'student'),
-('Sinh viên thử nghiệm 09', 'SVTEST009', 'student.test09@example.com', '123456', 'student'),
-('Sinh viên thử nghiệm 10', 'SVTEST010', 'student.test10@example.com', '123456', 'student');
+('Quản trị viên', 'ADMIN01', 'admin@gmail.com', '$2y$10$0QwcMj6T3.Zwj0rLBhwnDePOybQQMdQdzF8cF8A0qQpivpL2NDrpm', 'admin'),
+('Nguyễn Văn Sinh Viên', 'SV001', 'student@gmail.com', '$2y$10$qIasKydGG4SNuWTCrB8RNO0bPXJ16A1tRwnCQu6h5XUeZ8VNYUljm', 'student'),
+('Sinh viên thử nghiệm 01', 'SVTEST001', 'student.test01@example.com', '$2y$10$qIasKydGG4SNuWTCrB8RNO0bPXJ16A1tRwnCQu6h5XUeZ8VNYUljm', 'student'),
+('Sinh viên thử nghiệm 02', 'SVTEST002', 'student.test02@example.com', '$2y$10$qIasKydGG4SNuWTCrB8RNO0bPXJ16A1tRwnCQu6h5XUeZ8VNYUljm', 'student'),
+('Sinh viên thử nghiệm 03', 'SVTEST003', 'student.test03@example.com', '$2y$10$qIasKydGG4SNuWTCrB8RNO0bPXJ16A1tRwnCQu6h5XUeZ8VNYUljm', 'student'),
+('Sinh viên thử nghiệm 04', 'SVTEST004', 'student.test04@example.com', '$2y$10$qIasKydGG4SNuWTCrB8RNO0bPXJ16A1tRwnCQu6h5XUeZ8VNYUljm', 'student'),
+('Sinh viên thử nghiệm 05', 'SVTEST005', 'student.test05@example.com', '$2y$10$qIasKydGG4SNuWTCrB8RNO0bPXJ16A1tRwnCQu6h5XUeZ8VNYUljm', 'student'),
+('Sinh viên thử nghiệm 06', 'SVTEST006', 'student.test06@example.com', '$2y$10$qIasKydGG4SNuWTCrB8RNO0bPXJ16A1tRwnCQu6h5XUeZ8VNYUljm', 'student'),
+('Sinh viên thử nghiệm 07', 'SVTEST007', 'student.test07@example.com', '$2y$10$qIasKydGG4SNuWTCrB8RNO0bPXJ16A1tRwnCQu6h5XUeZ8VNYUljm', 'student'),
+('Sinh viên thử nghiệm 08', 'SVTEST008', 'student.test08@example.com', '$2y$10$qIasKydGG4SNuWTCrB8RNO0bPXJ16A1tRwnCQu6h5XUeZ8VNYUljm', 'student'),
+('Sinh viên thử nghiệm 09', 'SVTEST009', 'student.test09@example.com', '$2y$10$qIasKydGG4SNuWTCrB8RNO0bPXJ16A1tRwnCQu6h5XUeZ8VNYUljm', 'student'),
+('Sinh viên thử nghiệm 10', 'SVTEST010', 'student.test10@example.com', '$2y$10$qIasKydGG4SNuWTCrB8RNO0bPXJ16A1tRwnCQu6h5XUeZ8VNYUljm', 'student');
 
 INSERT INTO categories (name, description) VALUES 
 ('Máy chiếu & Phụ kiện', 'Thiết bị trình chiếu phòng họp/giảng đường'),

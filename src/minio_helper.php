@@ -1,4 +1,24 @@
 <?php
+function minio_validate_uploaded_file(array $file, array $allowedTypes, int $maxBytes): array {
+    $error = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($error === UPLOAD_ERR_NO_FILE) return ['valid' => true, 'mime' => null, 'error' => ''];
+    if ($error !== UPLOAD_ERR_OK) return ['valid' => false, 'mime' => null, 'error' => 'Tệp tải lên không hoàn tất hoặc vượt giới hạn máy chủ.'];
+    if ((int)($file['size'] ?? 0) < 1 || (int)$file['size'] > $maxBytes) {
+        return ['valid' => false, 'mime' => null, 'error' => 'Kích thước tệp không hợp lệ hoặc vượt giới hạn cho phép.'];
+    }
+    $tmp = (string)($file['tmp_name'] ?? '');
+    if (!$tmp || !is_uploaded_file($tmp) || !class_exists('finfo')) {
+        return ['valid' => false, 'mime' => null, 'error' => 'Không thể xác minh nội dung tệp tải lên.'];
+    }
+    $extension = strtolower(pathinfo((string)($file['name'] ?? ''), PATHINFO_EXTENSION));
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file($tmp);
+    if (!isset($allowedTypes[$extension]) || $allowedTypes[$extension] !== $mime) {
+        return ['valid' => false, 'mime' => null, 'error' => 'Định dạng hoặc nội dung tệp không được hỗ trợ.'];
+    }
+    return ['valid' => true, 'mime' => $mime, 'error' => ''];
+}
+
 class MinioClient {
     private string $endpoint;
     private string $accessKey;

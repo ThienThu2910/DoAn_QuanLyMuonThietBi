@@ -37,11 +37,38 @@ Lần đầu MySQL cần khoảng 30–60 giây để khởi tạo. Nếu web b�
 
 **Bước 2 — Tạo bucket MinIO.** Mở http://localhost:9001, đăng nhập `minioadmin` / `minioadmin123`, vào **Buckets → Create Bucket** và tạo bucket tên đúng là `project-files`. Thiếu bước này thì không tải được tệp.
 
-**Bước 3 — Đồng bộ CSDL.** Mở http://localhost:8080/setup.php **một lần** để cập nhật schema (bao gồm chuyển cột mật khẩu sang `password`) và thêm các cột/bảng `borrow_logs` mà `init.sql` chưa có. Với CSDL cũ dùng hash, setup sẽ đặt lại tài khoản demo thành `admin123` và `123456`; mật khẩu các tài khoản khác không thể khôi phục từ hash.
+**Bước 3 — Đăng nhập quản trị rồi đồng bộ CSDL.** Dùng `admin@gmail.com` / `admin123` và mở http://localhost:8080/setup.php. Xác nhận biểu mẫu để cập nhật schema, tạo tài khoản thử nghiệm còn thiếu và hash các mật khẩu cũ mà không đổi giá trị mật khẩu người dùng.
 
 **Bước 4 — Đăng nhập** tại http://localhost:8080.
 
 Trang quản lý tài khoản có thêm 10 tài khoản sinh viên thử nghiệm sau khi chạy `/setup.php`. Các tài khoản dùng mật khẩu `123456`, mã từ `SVTEST001` đến `SVTEST010`, email từ `student.test01@example.com` đến `student.test10@example.com`.
+
+## Kiểm tra tĩnh
+
+Trên Windows có Docker CLI và Node.js, chạy:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/run-static-checks.ps1
+```
+
+Bộ kiểm tra này xác nhận cấu hình Compose, cú pháp JavaScript và một số invariant bảo mật trong source. Nó không thay thế PHP lint hoặc test nghiệp vụ với MySQL/MinIO.
+
+## Chạy smoke test trên stack QA riêng
+
+Stack QA trong `tests/compose.qa.yaml` dùng database/MinIO volume riêng và bind cổng vào `127.0.0.1` (`18080`, `18081`, `13307`, `19000`, `19001`). Khởi động bằng project name riêng để không trộn với stack ứng dụng:
+
+```powershell
+docker compose -p altf4codexqa20261114 -f tests/compose.qa.yaml up -d --build
+$env:ALT_F4_ADMIN_EMAIL = 'admin@gmail.com'
+$env:ALT_F4_ADMIN_PASSWORD = 'admin123'
+$env:ALT_F4_STUDENT_EMAIL = 'student@gmail.com'
+$env:ALT_F4_STUDENT_PASSWORD = '123456'
+node tests/run-qa-smoke.mjs
+```
+
+Runner kiểm tra login/role, CSRF và MinIO readiness; nó không tạo phiếu hay thay dữ liệu nghiệp vụ. Cấu hình `tests/compose.schema.qa.yaml` dành cho database schema mới trên cổng `13308`. Hai stack QA có volume riêng; không dùng volume của ứng dụng chính và không chạy `down -v` nếu muốn giữ dữ liệu test.
+
+`tests/run-qa-return-conditions.mjs` kiểm tra nhận lại thiết bị hỏng/thiếu phụ kiện qua HTTP. Chỉ chạy trên QA với hai phiếu test đang ở trạng thái `approved`, rồi truyền ID của chúng qua `ALT_F4_DAMAGED_REQUEST_ID` và `ALT_F4_INCOMPLETE_REQUEST_ID`; runner sẽ thay đổi phiếu và tồn kho QA tương ứng.
 
 ## Địa chỉ và tài khoản
 
@@ -70,8 +97,8 @@ Kiểm chứng dữ liệu bền vững: tạo phiếu mượn có đính kèm t
 |---|---|
 | "Lỗi kết nối cơ sở dữ liệu" | MySQL chưa khởi tạo xong, đợi rồi tải lại; xem `docker compose logs database` |
 | Tải tệp báo lỗi MinIO | Tạo bucket `project-files` (Bước 2) |
-| Lỗi cột/bảng không tồn tại khi duyệt phiếu, sửa thiết bị, báo cáo | Chạy `/setup.php` (Bước 3) |
-| Đăng nhập demo báo sai mật khẩu | Mở http://localhost:8080/reset_pw.php một lần để đặt lại `admin123` và `123456` |
+| Lỗi cột/bảng không tồn tại khi duyệt phiếu, sửa thiết bị, báo cáo | Đăng nhập quản trị rồi chạy `/setup.php` (Bước 3) |
+| Đăng nhập demo báo sai mật khẩu | Đăng nhập quản trị rồi mở `/reset_pw.php` và xác nhận biểu mẫu |
 | Chữ lỗi kiểu `Quáº£n trá»‹ viÃªn` | Dữ liệu cũ được tự sửa lần truy cập đầu; muốn sạch hẳn: `docker compose down -v` rồi `up -d --build` |
 | Cổng bị chiếm | Đổi cổng bên trái trong mục `ports` của `compose.yaml` |
 | Tải tệp lớn bị từ chối | Dùng tệp nhỏ hơn 2 MB |
@@ -90,4 +117,4 @@ Kiểm chứng dữ liệu bền vững: tạo phiếu mượn có đính kèm t
 
 ## Lưu ý
 
-Mật khẩu người dùng được lưu trực tiếp dưới dạng văn bản thuần để tiện demo; không dùng cấu hình này cho dữ liệu thật hoặc triển khai công khai. Các tệp `setup.php`, `reset_pw.php`, `check_password.php` không yêu cầu đăng nhập và mật khẩu mặc định được ghi sẵn trong `compose.yaml`, nên chỉ phù hợp môi trường demo cục bộ.
+Ứng dụng hash mật khẩu mới bằng `password_hash` và tự nâng cấp mật khẩu cũ khi đăng nhập hoặc chạy setup. Tài khoản demo, mật khẩu mặc định, MySQL root và MinIO credentials vẫn dành riêng cho môi trường cục bộ; hãy thay secrets trước khi triển khai ra mạng công khai.

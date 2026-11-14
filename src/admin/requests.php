@@ -8,75 +8,57 @@ $filter_status = trim($_GET['status'] ?? '');
 
 // 1. Xử lý các thao tác quản trị
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
-    $requestId = (int)($_POST['id'] ?? 0);
+    app_require_csrf();
+    $action = app_post_string('action');
+    $requestId = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT) ?: 0;
+    try {
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare('SELECT * FROM borrow_requests WHERE id = ? FOR UPDATE');
+        $stmt->execute([$requestId]);
+        $req = $stmt->fetch();
+        if (!$req) throw new RuntimeException('Không tìm thấy phiếu mượn.');
+        $adminId = (int)$_SESSION['user']['id'];
 
-    $stmt = $pdo->prepare("SELECT * FROM borrow_requests WHERE id = ?");
-    $stmt->execute([$requestId]);
-    $req = $stmt->fetch();
-
-    if ($req) {
-        try {
-            $pdo->beginTransaction();
-            $adminId = $_SESSION['user']['id'];
-
-            // A. Duyệt & Bàn giao thiết bị
-            if ($action === 'approve' && $req['status'] === 'pending') {
-                $avail = $pdo->query("SELECT available_qty FROM devices WHERE id = {$req['device_id']} FOR UPDATE")->fetchColumn();
-                if ($avail >= $req['quantity']) {
-                    $pdo->exec("UPDATE devices SET available_qty = available_qty - {$req['quantity']} WHERE id = {$req['device_id']}");
-                    $pdo->prepare("UPDATE borrow_requests SET status = 'approved', handover_by = ?, handover_at = NOW() WHERE id = ?")
-                        ->execute([$adminId, $requestId]);
-                    
-                    // Ghi log
-                    $pdo->prepare("INSERT INTO borrow_logs (request_id, actor_id, action, note) VALUES (?, ?, 'approved', 'Đã duyệt và bàn giao thiết bị')")
-                        ->execute([$requestId, $adminId]);
-
-                    $msg = "Đã duyệt và xác nhận bàn giao thiết bị cho phiếu #{$requestId}!";
-                } else {
-                    $err = "Không đủ số lượng thiết bị khả dụng trong kho!";
-                }
-            } 
-            // B. Từ chối kèm lý do
-            elseif ($action === 'reject' && $req['status'] === 'pending') {
-                $reason = trim($_POST['reject_reason'] ?? 'Không đủ điều kiện mượn');
-                $pdo->prepare("UPDATE borrow_requests SET status = 'rejected', reject_reason = ? WHERE id = ?")
-                    ->execute([$reason, $requestId]);
-
-                // Ghi log
-                $pdo->prepare("INSERT INTO borrow_logs (request_id, actor_id, action, note) VALUES (?, ?, 'rejected', ?)")
-                    ->execute([$requestId, $adminId, "Từ chối: " . $reason]);
-
-                $msg = "Đã từ chối phiếu mượn #{$requestId}.";
-            } 
-            // C. Nhận lại thiết bị & Đánh giá tình trạng
-            elseif ($action === 'return' && $req['status'] === 'approved') {
-                $condition = $_POST['return_condition'] ?? 'good';
-                $returnNote = trim($_POST['return_note'] ?? '');
-
-                // Hoàn trả vào kho
-                $pdo->exec("UPDATE devices SET available_qty = available_qty + {$req['quantity']} WHERE id = {$req['device_id']}");
-                
-                // Nếu bị hỏng hoặc mất, cập nhật trạng thái thiết bị sang bảo trì
-                if (in_array($condition, ['damaged', 'lost'])) {
-                    $pdo->exec("UPDATE devices SET status = 'maintenance' WHERE id = {$req['device_id']}");
-                }
-
-                $pdo->prepare("UPDATE borrow_requests SET status = 'returned', actual_return_date = CURDATE(), return_condition = ?, return_note = ? WHERE id = ?")
-                    ->execute([$condition, $returnNote, $requestId]);
-
-                // Ghi log
-                $pdo->prepare("INSERT INTO borrow_logs (request_id, actor_id, action, note) VALUES (?, ?, 'returned', ?)")
-                    ->execute([$requestId, $adminId, "Hoàn trả: Tình trạng {$condition}. Ghi chú: {$returnNote}"]);
-
-                $msg = "Đã xác nhận hoàn trả thiết bị và kiểm toán kho thành công!";
+        if ($action === 'approve' && $req['status'] === 'pending') {
+            $stock = $pdo->prepare('SELECT available_qty, status FROM devices WHERE id = ? FOR UPDATE');
+            $stock->execute([$req['device_id']]);
+            $deviceStock = $stock->fetch();
+            if (($deviceStock['status'] ?? 'good') !== 'good') throw new RuntimeException('Thiết bị hiện không ở trạng thái sẵn sàng để bàn giao.');
+            if ((int)$deviceStock['available_qty'] < (int)$req['quantity']) {
+                throw new RuntimeException('Không đủ số lượng thiết bị khả dụng trong kho.');
             }
-
-            $pdo->commit();
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            $err = "Lỗi xử lý: " . $e->getMessage();
+            $pdo->prepare('UPDATE devices SET available_qty = available_qty - ? WHERE id = ?')->execute([$req['quantity'], $req['device_id']]);
+            $pdo->prepare("UPDATE borrow_requests SET status = 'approved', handover_by = ?, handover_at = NOW() WHERE id = ?")
+                ->execute([$adminId, $requestId]);
+            $pdo->prepare("INSERT INTO borrow_logs (request_id, actor_id, action, note) VALUES (?, ?, 'approved', ?)")
+                ->execute([$requestId, $adminId, 'Đã duyệt và bàn giao thiết bị']);
+            $msg = "Đã duyệt và xác nhận bàn giao thiết bị cho phiếu #{$requestId}!";
+        } elseif ($action === 'reject' && $req['status'] === 'pending') {
+            $reason = trim(app_post_string('reject_reason')) ?: 'Không đủ điều kiện mượn';
+            $pdo->prepare("UPDATE borrow_requests SET status = 'rejected', reject_reason = ? WHERE id = ?")->execute([$reason, $requestId]);
+            $pdo->prepare("INSERT INTO borrow_logs (request_id, actor_id, action, note) VALUES (?, ?, 'rejected', ?)")
+                ->execute([$requestId, $adminId, 'Từ chối: ' . $reason]);
+            $msg = "Đã từ chối phiếu mượn #{$requestId}.";
+        } elseif ($action === 'return' && $req['status'] === 'approved') {
+            $condition = app_post_string('return_condition') ?: 'good';
+            if (!in_array($condition, ['good', 'damaged', 'lost', 'incomplete'], true)) $condition = 'good';
+            $returnNote = trim(app_post_string('return_note'));
+            app_return_borrowed_stock($pdo, (int)$req['device_id'], (int)$req['quantity'], $condition);
+            $pdo->prepare("UPDATE borrow_requests SET status = 'returned', actual_return_date = CURDATE(), return_condition = ?, return_note = ? WHERE id = ?")
+                ->execute([$condition, $returnNote, $requestId]);
+            $pdo->prepare("INSERT INTO borrow_logs (request_id, actor_id, action, note) VALUES (?, ?, 'returned', ?)")
+                ->execute([$requestId, $adminId, 'Hoàn trả: ' . $condition . ($returnNote ? '. ' . $returnNote : '')]);
+            $msg = $condition === 'lost'
+                ? 'Đã ghi nhận thiết bị bị mất và cập nhật giảm số lượng tồn kho.'
+                : 'Đã xác nhận hoàn trả thiết bị và cập nhật kho thành công!';
+        } else {
+            throw new RuntimeException('Phiếu không còn ở trạng thái phù hợp với thao tác này.');
         }
+        $pdo->commit();
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        if ($e instanceof RuntimeException) $err = $e->getMessage();
+        else { error_log('Borrow request action failed: ' . $e->getMessage()); $err = 'Không thể cập nhật phiếu mượn. Vui lòng thử lại.'; }
     }
 }
 
@@ -203,6 +185,7 @@ $today = new DateTime('today');
 
                             <?php if ($r['status'] === 'pending'): ?>
                                 <form method="POST" style="display: inline-block;">
+                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
                                     <input type="hidden" name="id" value="<?= $r['id'] ?>">
                                     <input type="hidden" name="action" value="approve">
                                     <button type="submit" class="btn-action" style="background: #10B981; color: #fff;" onclick="return confirm('Duyệt và bàn giao thiết bị cho sinh viên?')">
@@ -230,6 +213,7 @@ $today = new DateTime('today');
     <div style="background: #fff; padding: 30px; border-radius: 24px; width: 100%; max-width: 440px;">
         <h3 style="margin-top: 0;">Lý Do Từ Chối Phiếu Mượn</h3>
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="id" id="rejectId">
             <input type="hidden" name="action" value="reject">
             <textarea name="reject_reason" style="width: 100%; height: 100px; padding: 12px; border-radius: 12px; border: 1px solid #CBD5E1; box-sizing: border-box; margin-bottom: 15px;" placeholder="Nhập lý do (VD: Thiết bị đang bảo trì, SV mượn quá số lượng quy định...)" required></textarea>
@@ -246,6 +230,7 @@ $today = new DateTime('today');
     <div style="background: #fff; padding: 30px; border-radius: 24px; width: 100%; max-width: 480px;">
         <h3 style="margin-top: 0;">Nghiệm Thu & Nhận Lại Thiết Bị</h3>
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="id" id="returnId">
             <input type="hidden" name="action" value="return">
             

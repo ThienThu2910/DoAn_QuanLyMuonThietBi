@@ -3,22 +3,32 @@ require_once 'config.php';
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = trim($_POST['email']);
-    $password = trim($_POST['password']);
+    app_require_csrf();
+    $email = trim(app_post_string('email'));
+    $password = app_post_string('password');
 
     $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
     $stmt->execute([$email]);
     $user = $stmt->fetch();
 
     // Hỗ trợ CSDL cũ trong lúc chưa chạy setup.php để đổi password_hash thành password.
-    $passwordMatches = false;
+    $storedPassword = '';
     if ($user && isset($user['password'])) {
-        $passwordMatches = ($password === $user['password']);
+        $storedPassword = (string)$user['password'];
     } elseif ($user && isset($user['password_hash'])) {
-        $passwordMatches = password_verify($password, $user['password_hash']);
+        $storedPassword = (string)$user['password_hash'];
     }
+    $passwordMatches = $user && app_password_matches($password, $storedPassword);
 
     if ($user && $passwordMatches) {
+        if (empty(password_get_info($storedPassword)['algo'])) {
+            $hashedPassword = app_password_hash($password);
+            $passwordColumn = array_key_exists('password', $user) ? 'password' : 'password_hash';
+            $pdo->prepare("UPDATE users SET {$passwordColumn} = ? WHERE id = ?")->execute([$hashedPassword, $user['id']]);
+            $user['password'] = $hashedPassword;
+        }
+        session_regenerate_id(true);
+        unset($user['password'], $user['password_hash']);
         $_SESSION['user'] = $user;
         if ($user['role'] === 'admin') {
             header("Location: /admin/index.php");
@@ -61,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
 
             <form method="POST" class="auth-form">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
                 <label class="field">
                     <span>Email</span>
                     <input type="email" name="email" class="form-control" placeholder="ten@gmail.com" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" autocomplete="username" required autofocus>

@@ -29,11 +29,12 @@ foreach ($students as $student) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $qty = (int)($_POST['quantity'] ?? 1);
-    $borrowDate = $_POST['borrow_date'] ?? '';
-    $expectedReturn = $_POST['expected_return_date'] ?? '';
-    $note = trim($_POST['note'] ?? '');
-    $borrowerId = $isAdmin ? (int)($_POST['student_id'] ?? 0) : (int)$_SESSION['user']['id'];
+    app_require_csrf();
+    $qty = filter_var($_POST['quantity'] ?? null, FILTER_VALIDATE_INT) ?: 0;
+    $borrowDate = app_post_string('borrow_date');
+    $expectedReturn = app_post_string('expected_return_date');
+    $note = trim(app_post_string('note'));
+    $borrowerId = $isAdmin ? (filter_var($_POST['student_id'] ?? null, FILTER_VALIDATE_INT) ?: 0) : (int)$_SESSION['user']['id'];
 
     if ($isAdmin) {
         $studentCheck = $pdo->prepare("SELECT id FROM users WHERE id = ? AND role = 'student'");
@@ -46,54 +47,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 1. Kiểm tra tính hợp lệ của dữ liệu mượn
     if ($error) {
         // Giữ thông báo xác thực sinh viên.
+    } elseif (($device['status'] ?? 'good') !== 'good') {
+        $error = 'Thiết bị hiện không ở trạng thái sẵn sàng để bàn giao.';
     } elseif ($qty < 1 || $qty > $device['available_qty']) {
         $error = "Số lượng yêu cầu không hợp lệ hoặc vượt quá số lượng hiện có ({$device['available_qty']}).";
-    } elseif (empty($borrowDate) || empty($expectedReturn)) {
-        $error = "Vui lòng chọn đầy đủ ngày mượn và ngày hẹn trả.";
+    } elseif (!app_is_valid_date($borrowDate) || !app_is_valid_date($expectedReturn)) {
+                $error = "Vui lòng chọn ngày mượn và ngày hẹn trả hợp lệ.";
     } elseif ($borrowDate < $today) {
         $error = "Ngày mượn không hợp lệ! Bạn không thể đăng ký mượn vào ngày đã qua.";
     } elseif ($expectedReturn < $borrowDate) {
         $error = "Ngày dự kiến trả không được nhỏ hơn ngày bắt đầu mượn.";
     } else {
         $handoverDocKey = null;
+        $handoverMeta = null;
 
         // 2. Xử lý tải tệp minh chứng lên MinIO
         if (isset($_FILES['handover_doc']) && !empty($_FILES['handover_doc']['name'])) {
-            $fileError = $_FILES['handover_doc']['error'];
-
-            if ($fileError === UPLOAD_ERR_INI_SIZE || $fileError === UPLOAD_ERR_FORM_SIZE) {
-                $error = "Tệp đính kèm quá lớn vượt quá giới hạn tải lên của hệ thống. Vui lòng chọn tệp dung lượng nhỏ hơn (dưới 2MB).";
-            } elseif ($fileError !== UPLOAD_ERR_OK) {
-                $error = "Lỗi khi tải tệp từ máy lên (Mã lỗi: " . $fileError . "). Vui lòng thử lại.";
-            } else {
+            $upload = minio_validate_uploaded_file($_FILES['handover_doc'], ['pdf'=>'application/pdf','png'=>'image/png','jpg'=>'image/jpeg','jpeg'=>'image/jpeg','webp'=>'image/webp'], 2 * 1024 * 1024);
+            if (!$upload['valid']) {
+                $error = $upload['error'];
+            } elseif ($upload['mime'] !== null) {
                 $tmpFile  = $_FILES['handover_doc']['tmp_name'];
                 $origName = $_FILES['handover_doc']['name'];
                 $fileSize = $_FILES['handover_doc']['size'];
                 $ext      = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-                $mimeType = mime_content_type($tmpFile);
-
-                $allowed = ['pdf', 'png', 'jpg', 'jpeg', 'webp'];
-                if (!in_array($ext, $allowed)) {
-                    $error = "Định dạng tệp không được hỗ trợ. Chỉ chấp nhận tài liệu PDF hoặc hình ảnh (PNG, JPG, JPEG, WEBP).";
-                } else {
-                    $objectKey   = "handover_docs/" . uniqid('doc_') . "." . $ext;
+                    $mimeType = $upload['mime'];
+                    $objectKey   = 'handover_docs/' . bin2hex(random_bytes(16)) . '.' . $ext;
                     $fileContent = file_get_contents($tmpFile);
 
                     try {
                         $minio = new MinioClient();
                         if ($minio->uploadObject($objectKey, $fileContent, $mimeType)) {
                             $handoverDocKey = $objectKey;
-
-                            // Lưu thông tin metadata vào cơ sở dữ liệu
-                            $stmtMeta = $pdo->prepare("INSERT INTO file_metadata (original_name, object_key, file_type, file_size, entity_type) VALUES (?, ?, ?, ?, 'borrow_request')");
-                            $stmtMeta->execute([$origName, $objectKey, $mimeType, $fileSize]);
+                            $handoverMeta = [$origName, $objectKey, $mimeType, $fileSize];
                         } else {
-                            $error = "Không thể tải tệp lên kho MinIO. Vui lòng mở bảng điều khiển MinIO Console (http://localhost:9001) kiểm tra xem đã tạo bucket 'project-files' chưa.";
+                            $error = 'Không thể lưu tệp lên MinIO. Vui lòng kiểm tra dịch vụ lưu trữ.';
                         }
                     } catch (Exception $e) {
-                        $error = "Lỗi kết nối MinIO S3: " . $e->getMessage();
+                        error_log('Handover upload failed: ' . $e->getMessage());
+                        $error = 'Không thể tải tệp lên kho lưu trữ. Vui lòng thử lại sau.';
                     }
-                }
             }
         }
 
@@ -101,9 +94,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($error)) {
             try {
                 $pdo->beginTransaction();
-                $lockDevice = $pdo->prepare('SELECT available_qty FROM devices WHERE id = ? FOR UPDATE');
+                $lockDevice = $pdo->prepare('SELECT available_qty, status FROM devices WHERE id = ? FOR UPDATE');
                 $lockDevice->execute([$device['id']]);
-                $availableQty = (int)$lockDevice->fetchColumn();
+                $lockedDevice = $lockDevice->fetch();
+                $availableQty = (int)($lockedDevice['available_qty'] ?? 0);
+                if (($lockedDevice['status'] ?? 'good') !== 'good') throw new RuntimeException('Thiết bị hiện không ở trạng thái sẵn sàng để bàn giao.');
                 if ($qty > $availableQty) {
                     throw new RuntimeException("Chỉ còn {$availableQty} thiết bị khả dụng.");
                 }
@@ -112,6 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $insert = $pdo->prepare("INSERT INTO borrow_requests (user_id, device_id, quantity, borrow_date, expected_return_date, handover_doc_key, note, status, handover_by, handover_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', ?, NOW())");
                     $insert->execute([$borrowerId, $device['id'], $qty, $borrowDate, $expectedReturn, $handoverDocKey, $note, $_SESSION['user']['id']]);
                     $requestId = (int)$pdo->lastInsertId();
+                    if ($handoverMeta) $pdo->prepare("INSERT INTO file_metadata (original_name, object_key, file_type, file_size, entity_id, entity_type) VALUES (?, ?, ?, ?, ?, 'borrow_request')")->execute([...$handoverMeta, $requestId]);
                     $pdo->prepare('UPDATE devices SET available_qty = available_qty - ? WHERE id = ?')->execute([$qty, $device['id']]);
                     $pdo->prepare("INSERT INTO borrow_logs (request_id, actor_id, action, note) VALUES (?, ?, 'approved', ?)")
                         ->execute([$requestId, $_SESSION['user']['id'], 'Quản trị viên ghi nhận bàn giao thiết bị trực tiếp']);
@@ -119,13 +115,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $insert = $pdo->prepare("INSERT INTO borrow_requests (user_id, device_id, quantity, borrow_date, expected_return_date, handover_doc_key, note, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')");
                     $insert->execute([$borrowerId, $device['id'], $qty, $borrowDate, $expectedReturn, $handoverDocKey, $note]);
+                    $requestId = (int)$pdo->lastInsertId();
+                    if ($handoverMeta) $pdo->prepare("INSERT INTO file_metadata (original_name, object_key, file_type, file_size, entity_id, entity_type) VALUES (?, ?, ?, ?, ?, 'borrow_request')")->execute([...$handoverMeta, $requestId]);
                     $success = 'Đã gửi yêu cầu mượn thành công! Vui lòng chờ quản trị viên phê duyệt.';
                 }
                 $pdo->commit();
                 $device['available_qty'] = $availableQty - ($isAdmin ? $qty : 0);
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $error = $isAdmin ? 'Không thể ghi nhận bàn giao: ' . $e->getMessage() : 'Không thể gửi yêu cầu mượn: ' . $e->getMessage();
+                if ($handoverDocKey) (new MinioClient())->deleteObject($handoverDocKey);
+                error_log('Borrow request save failed: ' . $e->getMessage());
+                $error = $e instanceof RuntimeException
+                    ? $e->getMessage()
+                    : ($isAdmin ? 'Không thể ghi nhận bàn giao. Vui lòng thử lại.' : 'Không thể gửi yêu cầu mượn. Vui lòng thử lại.');
             }
         }
     }
@@ -149,11 +151,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .student-search-wrap .form-control { padding-left: 42px; margin-bottom: 0; }
         .student-results { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; right: 0; max-height: 260px; overflow-y: auto; padding: 6px; border: 1px solid #D6E2DF; border-radius: 14px; background: #fff; box-shadow: 0 14px 32px rgba(15, 24, 47, .14); }
         .student-result { display: block; width: 100%; padding: 10px 12px; border: 0; border-radius: 9px; background: transparent; color: #18332E; text-align: left; cursor: pointer; }
+        .student-result[hidden] { display: none; }
         .student-result:hover, .student-result:focus-visible { background: #EAF5F1; outline: none; }
         .student-result strong, .student-result span { display: block; }
         .student-result span { margin-top: 2px; color: #718096; font-size: .82rem; }
         .student-empty { padding: 12px; color: #718096; font-size: .9rem; }
         .student-selected { display: flex; align-items: center; gap: 12px; padding: 13px 14px; border: 1px solid #B7DED0; border-radius: 14px; background: #F0F8F4; }
+        .student-selected[hidden] { display: none; }
         .student-selected-icon { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border-radius: 50%; background: #D8EEE4; color: #167455; font-size: 1.1rem; }
         .student-selected-info { flex: 1; min-width: 0; }
         .student-selected-info strong, .student-selected-info span { display: block; overflow-wrap: anywhere; }
@@ -197,6 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
         <?php if ($isAdmin): ?>
             <div class="form-group">
                 <label for="student-search">Sinh viên nhận thiết bị</label>

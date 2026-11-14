@@ -11,11 +11,12 @@ $error = '';
 $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $fullname     = trim($_POST['fullname'] ?? '');
-    $student_code = trim($_POST['student_code'] ?? '');
-    $email        = trim($_POST['email'] ?? '');
-    $password     = $_POST['password'] ?? '';
-    $re_password  = $_POST['re_password'] ?? '';
+    app_require_csrf();
+    $fullname     = trim(app_post_string('fullname'));
+    $student_code = trim(app_post_string('student_code'));
+    $email        = trim(app_post_string('email'));
+    $password     = app_post_string('password');
+    $re_password  = app_post_string('re_password');
 
     // Kiểm tra dữ liệu đầu vào
     if (empty($fullname) || empty($email) || empty($password)) {
@@ -37,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             try {
                 $insert = $pdo->prepare("INSERT INTO users (fullname, student_code, email, password, role) VALUES (?, ?, ?, ?, ?)");
-                $insert->execute([$fullname, !empty($student_code) ? $student_code : null, $email, $password, $role]);
+                $insert->execute([$fullname, !empty($student_code) ? $student_code : null, $email, app_password_hash($password), $role]);
                 $success = "Đăng ký tài khoản thành công! Bạn có thể đăng nhập ngay bây giờ.";
             } catch (Exception $e) {
                 $error = "Lỗi hệ thống: " . $e->getMessage();
@@ -82,6 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php else: ?>
 
             <form method="POST" class="auth-form">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
                 <label class="field">
                     <span>Họ và tên *</span>
                     <input type="text" name="fullname" class="form-control" placeholder="VD: Nguyễn Văn A" value="<?= htmlspecialchars($_POST['fullname'] ?? '') ?>" autocomplete="name" required>

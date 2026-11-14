@@ -7,50 +7,77 @@ $msg = '';
 $err = '';
 
 // Xử lý thêm thiết bị mới
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add') {
-    $catId = (int)$_POST['category_id'];
-    $code = trim($_POST['code']);
-    $name = trim($_POST['name']);
-    $qty = (int)$_POST['quantity'];
-    $desc = trim($_POST['description']);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    app_require_csrf();
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add') {
+    $catId = filter_var($_POST['category_id'] ?? null, FILTER_VALIDATE_INT) ?: 0;
+    $code = trim(app_post_string('code'));
+    $name = trim(app_post_string('name'));
+    $qty = filter_var($_POST['quantity'] ?? null, FILTER_VALIDATE_INT) ?: 0;
+    $desc = trim(app_post_string('description'));
     $imageKey = null;
+    $imageMeta = null;
 
     if (empty($code) || empty($name) || $qty < 1) {
         $err = "Vui lòng nhập đầy đủ mã, tên thiết bị và số lượng lớn hơn 0.";
     } else {
-        if (isset($_FILES['device_image']) && $_FILES['device_image']['error'] === UPLOAD_ERR_OK) {
+        $categoryCheck = $pdo->prepare('SELECT 1 FROM categories WHERE id = ?');
+        $categoryCheck->execute([$catId]);
+        if (!$categoryCheck->fetchColumn()) $err = 'Vui lòng chọn danh mục hợp lệ.';
+
+        if (!$err && isset($_FILES['device_image'])) {
+            $upload = minio_validate_uploaded_file($_FILES['device_image'], ['jpg'=>'image/jpeg','jpeg'=>'image/jpeg','png'=>'image/png','webp'=>'image/webp'], 5 * 1024 * 1024);
+            if (!$upload['valid']) $err = $upload['error'];
+            elseif ($upload['mime'] !== null) {
             $tmpFile = $_FILES['device_image']['tmp_name'];
             $origName = $_FILES['device_image']['name'];
             $fileSize = $_FILES['device_image']['size'];
             $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-            $mimeType = mime_content_type($tmpFile);
-
-            if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
-                $objectKey = "devices/" . uniqid('dev_') . "." . $ext;
+                $mimeType = $upload['mime'];
+                $objectKey = 'devices/' . bin2hex(random_bytes(16)) . '.' . $ext;
                 $minio = new MinioClient();
                 if ($minio->uploadObject($objectKey, file_get_contents($tmpFile), $mimeType)) {
                     $imageKey = $objectKey;
-                    $pdo->prepare("INSERT INTO file_metadata (original_name, object_key, file_type, file_size, entity_type) VALUES (?, ?, ?, ?, 'device')")->execute([$origName, $objectKey, $mimeType, $fileSize]);
+                    $imageMeta = [$origName, $objectKey, $mimeType, $fileSize];
+                } else {
+                    $err = 'Không thể lưu ảnh lên MinIO. Vui lòng kiểm tra dịch vụ lưu trữ.';
                 }
             }
         }
 
-        try {
-            $stmt = $pdo->prepare("INSERT INTO devices (category_id, code, name, quantity, available_qty, description, image_key) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$catId, $code, $name, $qty, $qty, $desc, $imageKey]);
-            $msg = "Đã thêm thiết bị mới vào kho thành công!";
-        } catch (Exception $e) {
-            $err = "Mã thiết bị đã tồn tại hoặc lỗi dữ liệu: " . $e->getMessage();
+        if (!$err) {
+            try {
+                $pdo->beginTransaction();
+                $stmt = $pdo->prepare("INSERT INTO devices (category_id, code, name, quantity, available_qty, description, image_key) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$catId, $code, $name, $qty, $qty, $desc, $imageKey]);
+                $newDeviceId = (int)$pdo->lastInsertId();
+                if ($imageMeta) $pdo->prepare("INSERT INTO file_metadata (original_name, object_key, file_type, file_size, entity_id, entity_type) VALUES (?, ?, ?, ?, ?, 'device')")->execute([...$imageMeta, $newDeviceId]);
+                $pdo->commit();
+                $msg = "Đã thêm thiết bị mới vào kho thành công!";
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                if ($imageKey) (new MinioClient())->deleteObject($imageKey);
+                error_log('Device create failed: ' . $e->getMessage());
+                $err = 'Không thể thêm thiết bị. Vui lòng kiểm tra mã thiết bị và dữ liệu đã nhập.';
+            }
         }
     }
 }
 
 // Xử lý xóa thiết bị
-if (isset($_GET['delete'])) {
-    $delId = (int)$_GET['delete'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete') {
+    $delId = filter_var($_POST['delete_id'] ?? null, FILTER_VALIDATE_INT) ?: 0;
     try {
-        $pdo->prepare("DELETE FROM devices WHERE id = ?")->execute([$delId]);
-        $msg = "Đã xóa thiết bị khỏi hệ thống.";
+        $hasHistory = $pdo->prepare('SELECT 1 FROM borrow_requests WHERE device_id = ? LIMIT 1');
+        $hasHistory->execute([$delId]);
+        if ($hasHistory->fetchColumn()) {
+            $err = 'Không thể xóa thiết bị đã có lịch sử mượn để bảo toàn hồ sơ.';
+        } else {
+            $pdo->prepare("DELETE FROM devices WHERE id = ?")->execute([$delId]);
+            $msg = "Đã xóa thiết bị khỏi hệ thống.";
+        }
     } catch (Exception $e) {
         $err = "Không thể xóa: Thiết bị đang có lịch sử mượn liên kết!";
     }
@@ -139,6 +166,7 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
     <div class="glass-box">
         <h3 style="margin-top: 0; margin-bottom: 18px; font-size: 1.25rem; font-weight: 700;">+ Thêm Thiết Bị Mới Vào Kho</h3>
         <form method="POST" enctype="multipart/form-data" style="display: grid; grid-template-columns: repeat(3, 1fr) 1fr; gap: 16px; align-items: end;">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="action" value="add">
             <div>
                 <label class="form-label">Mã thiết bị</label>
@@ -219,9 +247,12 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
                             <a href="/admin/device_edit.php?id=<?= $d['id'] ?>&amp;return=<?= urlencode('/admin/devices.php#device-' . (int)$d['id']) ?>" class="btn-action-pill btn-edit-device">
                                 <i class="bi bi-pencil-square"></i> Sửa
                             </a>
-                            <a href="?delete=<?= $d['id'] ?>" onclick="return confirm('Bạn có chắc chắn muốn xóa thiết bị này khỏi hệ thống?')" class="btn-action-pill btn-delete">
-                                <i class="bi bi-trash"></i> Xóa
-                            </a>
+                            <form method="POST" style="display:inline" onsubmit="return confirm('Bạn có chắc chắn muốn xóa thiết bị này khỏi hệ thống?')">
+                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="delete_id" value="<?= (int)$d['id'] ?>">
+                                <button type="submit" class="btn-action-pill btn-delete" style="border:0;cursor:pointer"><i class="bi bi-trash"></i> Xóa</button>
+                            </form>
                         </td>
                     </tr>
                 <?php endforeach; ?>

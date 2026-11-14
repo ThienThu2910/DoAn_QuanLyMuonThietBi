@@ -135,7 +135,10 @@ $navRole = ($user && $user['role'] === 'admin') ? 'Quản trị viên' : (($user
                 <span class="t-avatar"><?= t_esc($navInit) ?></span>
                 <span class="t-me-text"><b><?= t_esc($user['fullname']) ?></b><small><?= t_esc($navRole) ?></small></span>
             </a>
-            <a class="t-me-out" href="/logout.php" title="Đăng xuất" aria-label="Đăng xuất"><?= ic('logout', 18) ?></a>
+            <form method="POST" action="/logout.php">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
+                <button type="submit" class="t-me-out" title="Đăng xuất" aria-label="Đăng xuất"><?= ic('logout', 18) ?></button>
+            </form>
         </div>
         <?php endif; ?>
         <div class="t-side-foot"><span class="t-dot"></span><span class="t-side-foot-text">Hệ thống hoạt động ổn định</span><span class="t-side-foot-ver">v2.0</span></div>

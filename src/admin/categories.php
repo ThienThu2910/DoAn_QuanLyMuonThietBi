@@ -5,20 +5,30 @@ checkAdmin();
 $msg = '';
 $err = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name'])) {
-    $name = trim($_POST['name']);
-    $desc = trim($_POST['description'] ?? '');
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    app_require_csrf();
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add' && isset($_POST['name'])) {
+    $name = trim(app_post_string('name'));
+    $desc = trim(app_post_string('description'));
     if (!empty($name)) {
         $pdo->prepare("INSERT INTO categories (name, description) VALUES (?, ?)")->execute([$name, $desc]);
         $msg = "Đã thêm danh mục mới thành công!";
     }
 }
 
-if (isset($_GET['delete'])) {
-    $delId = (int)$_GET['delete'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete') {
+    $delId = filter_var($_POST['delete_id'] ?? null, FILTER_VALIDATE_INT) ?: 0;
     try {
-        $pdo->prepare("DELETE FROM categories WHERE id = ?")->execute([$delId]);
-        $msg = "Đã xóa danh mục thành công.";
+        $hasDevices = $pdo->prepare('SELECT 1 FROM devices WHERE category_id = ? LIMIT 1');
+        $hasDevices->execute([$delId]);
+        if ($hasDevices->fetchColumn()) {
+            $err = 'Không thể xóa danh mục đang có thiết bị. Hãy chuyển thiết bị sang danh mục khác trước.';
+        } else {
+            $pdo->prepare("DELETE FROM categories WHERE id = ?")->execute([$delId]);
+            $msg = "Đã xóa danh mục thành công.";
+        }
     } catch (Exception $e) {
         $err = "Không thể xóa: Danh mục đang có thiết bị trực thuộc!";
     }
@@ -92,6 +102,8 @@ $categories = $pdo->query("SELECT c.*, COUNT(d.id) as device_count FROM categori
     <div class="glass-box">
         <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.2rem; font-weight: 700;">+ Thêm Danh Mục Mới</h3>
         <form method="POST" style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 15px; align-items: end;">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="action" value="add">
             <div>
                 <label class="form-label">Tên danh mục *</label>
                 <input type="text" name="name" class="form-control" placeholder="VD: Kính VR & AR" required>
@@ -124,9 +136,12 @@ $categories = $pdo->query("SELECT c.*, COUNT(d.id) as device_count FROM categori
                         <td style="color: #64748B; font-size: 0.9rem;"><?= htmlspecialchars($cat['description'] ?? 'Chưa có mô tả') ?></td>
                         <td><strong style="color: #2563EB; font-size: 1rem;"><?= $cat['device_count'] ?></strong> thiết bị</td>
                         <td>
-                            <a href="?delete=<?= $cat['id'] ?>" onclick="return confirm('Bạn có chắc chắn muốn xóa danh mục này?')" class="btn-delete">
-                                <i class="bi bi-trash"></i> Xóa
-                            </a>
+                            <form method="POST" style="display:inline" onsubmit="return confirm('Bạn có chắc chắn muốn xóa danh mục này?')">
+                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(app_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="delete_id" value="<?= (int)$cat['id'] ?>">
+                                <button type="submit" class="btn-delete" style="border:0;cursor:pointer"><i class="bi bi-trash"></i> Xóa</button>
+                            </form>
                         </td>
                     </tr>
                 <?php endforeach; ?>
