@@ -190,7 +190,7 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
             </thead>
             <tbody>
                 <?php foreach ($devices as $d): ?>
-                    <tr>
+                    <tr id="device-<?= (int)$d['id'] ?>">
                         <td style="width: 70px;">
                             <?php if ($d['image_key']): ?>
                                 <img src="/view_file.php?key=<?= urlencode($d['image_key']) ?>" 
@@ -216,7 +216,7 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
                             <a href="/device_detail.php?id=<?= $d['id'] ?>" class="btn-action-pill btn-view-detail">
                                 <i class="bi bi-eye"></i> Chi tiết
                             </a>
-                            <a href="/admin/device_edit.php?id=<?= $d['id'] ?>" class="btn-action-pill btn-edit-device">
+                            <a href="/admin/device_edit.php?id=<?= $d['id'] ?>&amp;return=<?= urlencode('/admin/devices.php#device-' . (int)$d['id']) ?>" class="btn-action-pill btn-edit-device">
                                 <i class="bi bi-pencil-square"></i> Sửa
                             </a>
                             <a href="?delete=<?= $d['id'] ?>" onclick="return confirm('Bạn có chắc chắn muốn xóa thiết bị này khỏi hệ thống?')" class="btn-action-pill btn-delete">

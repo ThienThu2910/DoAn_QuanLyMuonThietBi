@@ -2,6 +2,7 @@
 require_once 'config.php';
 require_once 'minio_helper.php';
 checkLogin();
+$isAdmin = ($_SESSION['user']['role'] === 'admin');
 
 $deviceId = (int)($_GET['device_id'] ?? 0);
 $stmt = $pdo->prepare("SELECT d.*, c.name as category_name FROM devices d JOIN categories c ON d.category_id = c.id WHERE d.id = ?");
@@ -15,15 +16,37 @@ if (!$device) {
 $error = '';
 $success = '';
 $today = date('Y-m-d');
+$students = $isAdmin
+    ? $pdo->query("SELECT id, fullname, student_code, email FROM users WHERE role = 'student' ORDER BY fullname")->fetchAll()
+    : [];
+$selectedStudentId = (int)($_POST['student_id'] ?? 0);
+$selectedStudent = null;
+foreach ($students as $student) {
+    if ((int)$student['id'] === $selectedStudentId) {
+        $selectedStudent = $student;
+        break;
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $qty = (int)($_POST['quantity'] ?? 1);
     $borrowDate = $_POST['borrow_date'] ?? '';
     $expectedReturn = $_POST['expected_return_date'] ?? '';
     $note = trim($_POST['note'] ?? '');
+    $borrowerId = $isAdmin ? (int)($_POST['student_id'] ?? 0) : (int)$_SESSION['user']['id'];
+
+    if ($isAdmin) {
+        $studentCheck = $pdo->prepare("SELECT id FROM users WHERE id = ? AND role = 'student'");
+        $studentCheck->execute([$borrowerId]);
+        if (!$studentCheck->fetchColumn()) {
+            $error = 'Vui lòng chọn một tài khoản sinh viên hợp lệ.';
+        }
+    }
 
     // 1. Kiểm tra tính hợp lệ của dữ liệu mượn
-    if ($qty < 1 || $qty > $device['available_qty']) {
+    if ($error) {
+        // Giữ thông báo xác thực sinh viên.
+    } elseif ($qty < 1 || $qty > $device['available_qty']) {
         $error = "Số lượng yêu cầu không hợp lệ hoặc vượt quá số lượng hiện có ({$device['available_qty']}).";
     } elseif (empty($borrowDate) || empty($expectedReturn)) {
         $error = "Vui lòng chọn đầy đủ ngày mượn và ngày hẹn trả.";
@@ -76,17 +99,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // 3. Ghi nhận phiếu mượn nếu không phát sinh lỗi
         if (empty($error)) {
-            $insert = $pdo->prepare("INSERT INTO borrow_requests (user_id, device_id, quantity, borrow_date, expected_return_date, handover_doc_key, note, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')");
-            $insert->execute([
-                $_SESSION['user']['id'],
-                $device['id'],
-                $qty,
-                $borrowDate,
-                $expectedReturn,
-                $handoverDocKey,
-                $note
-            ]);
-            $success = "Đã gửi yêu cầu mượn thành công! Vui lòng chờ quản trị viên phê duyệt.";
+            try {
+                $pdo->beginTransaction();
+                $lockDevice = $pdo->prepare('SELECT available_qty FROM devices WHERE id = ? FOR UPDATE');
+                $lockDevice->execute([$device['id']]);
+                $availableQty = (int)$lockDevice->fetchColumn();
+                if ($qty > $availableQty) {
+                    throw new RuntimeException("Chỉ còn {$availableQty} thiết bị khả dụng.");
+                }
+
+                if ($isAdmin) {
+                    $insert = $pdo->prepare("INSERT INTO borrow_requests (user_id, device_id, quantity, borrow_date, expected_return_date, handover_doc_key, note, status, handover_by, handover_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', ?, NOW())");
+                    $insert->execute([$borrowerId, $device['id'], $qty, $borrowDate, $expectedReturn, $handoverDocKey, $note, $_SESSION['user']['id']]);
+                    $requestId = (int)$pdo->lastInsertId();
+                    $pdo->prepare('UPDATE devices SET available_qty = available_qty - ? WHERE id = ?')->execute([$qty, $device['id']]);
+                    $pdo->prepare("INSERT INTO borrow_logs (request_id, actor_id, action, note) VALUES (?, ?, 'approved', ?)")
+                        ->execute([$requestId, $_SESSION['user']['id'], 'Quản trị viên ghi nhận bàn giao thiết bị trực tiếp']);
+                    $success = 'Đã ghi nhận bàn giao thiết bị cho sinh viên thành công.';
+                } else {
+                    $insert = $pdo->prepare("INSERT INTO borrow_requests (user_id, device_id, quantity, borrow_date, expected_return_date, handover_doc_key, note, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')");
+                    $insert->execute([$borrowerId, $device['id'], $qty, $borrowDate, $expectedReturn, $handoverDocKey, $note]);
+                    $success = 'Đã gửi yêu cầu mượn thành công! Vui lòng chờ quản trị viên phê duyệt.';
+                }
+                $pdo->commit();
+                $device['available_qty'] = $availableQty - ($isAdmin ? $qty : 0);
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                $error = $isAdmin ? 'Không thể ghi nhận bàn giao: ' . $e->getMessage() : 'Không thể gửi yêu cầu mượn: ' . $e->getMessage();
+            }
         }
     }
 }
@@ -96,7 +136,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đăng Ký Mượn Thiết Bị • <?= htmlspecialchars($device['name']) ?></title>
+    <title><?= $isAdmin ? 'Ghi Nhận Bàn Giao' : 'Đăng Ký Mượn' ?> • <?= htmlspecialchars($device['name']) ?></title>
+    <style>
+        .date-picker-field { display: flex; align-items: center; gap: 8px; }
+        .date-picker-field .form-control { flex: 1; min-width: 0; margin-bottom: 0; }
+        .date-picker-trigger { flex: 0 0 44px; height: 44px; border: 1px solid #CBD5E1; border-radius: 12px; background: #fff; color: #2563EB; font-size: 1.05rem; cursor: pointer; }
+        .date-picker-trigger:hover { background: #EFF6FF; border-color: #93C5FD; }
+        .date-picker-trigger:focus-visible { outline: 3px solid rgba(37, 99, 235, .25); outline-offset: 2px; }
+        .student-picker { position: relative; }
+        .student-search-wrap { position: relative; }
+        .student-search-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #718096; pointer-events: none; }
+        .student-search-wrap .form-control { padding-left: 42px; margin-bottom: 0; }
+        .student-results { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; right: 0; max-height: 260px; overflow-y: auto; padding: 6px; border: 1px solid #D6E2DF; border-radius: 14px; background: #fff; box-shadow: 0 14px 32px rgba(15, 24, 47, .14); }
+        .student-result { display: block; width: 100%; padding: 10px 12px; border: 0; border-radius: 9px; background: transparent; color: #18332E; text-align: left; cursor: pointer; }
+        .student-result:hover, .student-result:focus-visible { background: #EAF5F1; outline: none; }
+        .student-result strong, .student-result span { display: block; }
+        .student-result span { margin-top: 2px; color: #718096; font-size: .82rem; }
+        .student-empty { padding: 12px; color: #718096; font-size: .9rem; }
+        .student-selected { display: flex; align-items: center; gap: 12px; padding: 13px 14px; border: 1px solid #B7DED0; border-radius: 14px; background: #F0F8F4; }
+        .student-selected-icon { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border-radius: 50%; background: #D8EEE4; color: #167455; font-size: 1.1rem; }
+        .student-selected-info { flex: 1; min-width: 0; }
+        .student-selected-info strong, .student-selected-info span { display: block; overflow-wrap: anywhere; }
+        .student-selected-info span { margin-top: 2px; color: #61756D; font-size: .84rem; }
+        .student-change { border: 0; background: transparent; color: #167455; font: inherit; font-size: .88rem; font-weight: 700; cursor: pointer; }
+    </style>
     <?php include __DIR__ . '/head.php'; ?>
 </head>
 <body>
@@ -104,8 +167,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <main class="container narrow">
 <div class="form-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
-        <h2 style="font-weight: 700; font-size: 1.5rem; margin: 0;">Phiếu Mượn Thiết Bị</h2>
-        <a href="/index.php" style="color: var(--accent); text-decoration: none; font-size: 0.9rem; font-weight: 600;">
+        <h2 style="font-weight: 700; font-size: 1.5rem; margin: 0;"><?= $isAdmin ? 'Ghi Nhận Bàn Giao Thiết Bị' : 'Phiếu Mượn Thiết Bị' ?></h2>
+        <a data-return href="/device_detail.php?id=<?= $deviceId ?>" style="color: var(--accent); text-decoration: none; font-size: 0.9rem; font-weight: 600;">
             <i class="bi bi-arrow-left"></i> Quay lại kho
         </a>
     </div>
@@ -119,7 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php if ($success): ?>
         <div class="alert alert-success">
             <i class="bi bi-check-circle-fill me-1"></i> <?= htmlspecialchars($success) ?><br><br>
-            <a href="/my_borrows.php" style="color: #065F46; font-weight: bold;">Xem danh sách phiếu mượn của bạn &rarr;</a>
+            <a href="<?= $isAdmin ? '/admin/requests.php?status=approved' : '/my_borrows.php' ?>" style="color: #065F46; font-weight: bold;"><?= $isAdmin ? 'Xem danh sách thiết bị đang cho mượn' : 'Xem danh sách phiếu mượn của bạn' ?> &rarr;</a>
         </div>
     <?php else: ?>
 
@@ -134,6 +197,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <form method="POST" enctype="multipart/form-data">
+        <?php if ($isAdmin): ?>
+            <div class="form-group">
+                <label for="student-search">Sinh viên nhận thiết bị</label>
+                <div class="student-picker">
+                    <input type="hidden" name="student_id" id="student_id" value="<?= $selectedStudent ? (int)$selectedStudent['id'] : '' ?>">
+                    <div class="student-search-wrap" id="student-search-wrap" <?= $selectedStudent ? 'hidden' : '' ?>>
+                        <i class="bi bi-search student-search-icon" aria-hidden="true"></i>
+                        <input type="search" id="student-search" class="form-control" placeholder="Tìm theo tên, mã sinh viên hoặc email" autocomplete="off" aria-autocomplete="list" aria-controls="student-results" aria-expanded="false" <?= $selectedStudent ? '' : 'required' ?>>
+                    </div>
+                    <div id="student-results" class="student-results" role="listbox" aria-label="Kết quả tìm sinh viên" hidden>
+                    <?php foreach ($students as $student): ?>
+                        <?php $studentCode = $student['student_code'] ?: 'Chưa có mã sinh viên'; ?>
+                        <button type="button" class="student-result" role="option" aria-selected="false"
+                                data-id="<?= (int)$student['id'] ?>"
+                                data-name="<?= htmlspecialchars($student['fullname'], ENT_QUOTES, 'UTF-8') ?>"
+                                data-code="<?= htmlspecialchars($studentCode, ENT_QUOTES, 'UTF-8') ?>"
+                                data-email="<?= htmlspecialchars($student['email'], ENT_QUOTES, 'UTF-8') ?>">
+                            <strong><?= htmlspecialchars($student['fullname']) ?></strong>
+                            <span><?= htmlspecialchars($studentCode) ?> · <?= htmlspecialchars($student['email']) ?></span>
+                        </button>
+                    <?php endforeach; ?>
+                        <div class="student-empty" id="student-empty" hidden>Không tìm thấy sinh viên phù hợp.</div>
+                    </div>
+                    <div class="student-selected" id="student-selected" <?= $selectedStudent ? '' : 'hidden' ?>>
+                        <span class="student-selected-icon"><i class="bi bi-person-check" aria-hidden="true"></i></span>
+                        <div class="student-selected-info">
+                            <strong id="selected-student-name"><?= htmlspecialchars($selectedStudent['fullname'] ?? '') ?></strong>
+                            <span id="selected-student-meta"><?php if ($selectedStudent): ?><?= htmlspecialchars($selectedStudent['student_code'] ?: 'Chưa có mã sinh viên') ?> · <?= htmlspecialchars($selectedStudent['email']) ?><?php endif; ?></span>
+                        </div>
+                        <button type="button" class="student-change" id="student-change">Đổi</button>
+                    </div>
+                </div>
+                <?php if (!$students): ?><small style="color:#B91C1C">Chưa có tài khoản sinh viên trong hệ thống.</small><?php endif; ?>
+                <small style="display:block; margin-top:8px; color:#64748B">Phiếu sẽ được ghi nhận là đã bàn giao và trừ số lượng khả dụng ngay.</small>
+            </div>
+        <?php endif; ?>
         <div class="form-group">
             <label>Số lượng cần mượn</label>
             <input type="number" name="quantity" class="form-control" min="1" max="<?= $device['available_qty'] ?>" value="1" required>
@@ -142,24 +241,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
             <div class="form-group">
                 <label>Ngày bắt đầu mượn</label>
-                <input type="date" 
-                       id="borrow_date" 
-                       name="borrow_date" 
-                       class="form-control" 
-                       min="<?= $today ?>" 
-                       value="<?= $today ?>" 
-                       onchange="updateReturnDateMin()"
-                       required>
+                <div class="date-picker-field">
+                    <input type="date"
+                           id="borrow_date"
+                           name="borrow_date"
+                           class="form-control"
+                           min="<?= $today ?>"
+                           value="<?= $today ?>"
+                           onchange="updateReturnDateMin()"
+                           required>
+                    <button type="button" class="date-picker-trigger" data-date-picker="borrow_date" aria-label="Mở lịch chọn ngày bắt đầu mượn" title="Chọn ngày">
+                        <i class="bi bi-calendar3" aria-hidden="true"></i>
+                    </button>
+                </div>
             </div>
             <div class="form-group">
                 <label>Ngày dự kiến trả</label>
-                <input type="date" 
-                       id="expected_return_date" 
-                       name="expected_return_date" 
-                       class="form-control" 
-                       min="<?= $today ?>" 
-                       value="<?= date('Y-m-d', strtotime('+3 days')) ?>" 
-                       required>
+                <div class="date-picker-field">
+                    <input type="date"
+                           id="expected_return_date"
+                           name="expected_return_date"
+                           class="form-control"
+                           min="<?= $today ?>"
+                           value="<?= date('Y-m-d', strtotime('+3 days')) ?>"
+                           required>
+                    <button type="button" class="date-picker-trigger" data-date-picker="expected_return_date" aria-label="Mở lịch chọn ngày dự kiến trả" title="Chọn ngày">
+                        <i class="bi bi-calendar3" aria-hidden="true"></i>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -175,7 +284,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <button type="submit" class="btn-submit">
-            <i class="bi bi-send-fill me-1"></i> Gửi Yêu Cầu Mượn
+            <i class="bi <?= $isAdmin ? 'bi-box-arrow-up-right' : 'bi-send-fill' ?> me-1"></i> <?= $isAdmin ? 'Xác Nhận Bàn Giao' : 'Gửi Yêu Cầu Mượn' ?>
         </button>
     </form>
     <?php endif; ?>
@@ -193,6 +302,93 @@ function updateReturnDateMin() {
             returnDateInput.value = borrowDateInput.value;
         }
     }
+}
+
+document.querySelectorAll('[data-date-picker]').forEach(function (button) {
+    button.addEventListener('click', function () {
+        const input = document.getElementById(button.dataset.datePicker);
+        if (!input) return;
+        if (typeof input.showPicker === 'function') input.showPicker();
+        else { input.focus(); input.click(); }
+    });
+});
+
+const studentSearch = document.getElementById('student-search');
+const studentSelect = document.getElementById('student_id');
+const studentResults = document.getElementById('student-results');
+const studentSearchWrap = document.getElementById('student-search-wrap');
+const studentSelectedCard = document.getElementById('student-selected');
+const studentEmpty = document.getElementById('student-empty');
+function normalizeStudentSearch(value) {
+    return value.toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+}
+function closeStudentResults() {
+    if (!studentResults || !studentSearch) return;
+    studentResults.hidden = true;
+    studentSearch.setAttribute('aria-expanded', 'false');
+}
+function selectStudent(option) {
+    studentSelect.value = option.dataset.id;
+    document.getElementById('selected-student-name').textContent = option.dataset.name;
+    document.getElementById('selected-student-meta').textContent = option.dataset.code + ' · ' + option.dataset.email;
+    studentSearchWrap.hidden = true;
+    studentSelectedCard.hidden = false;
+    studentSearch.required = false;
+    studentSearch.value = '';
+    closeStudentResults();
+}
+if (studentSearch && studentSelect && studentResults) {
+    studentSearch.addEventListener('input', function () {
+        const query = normalizeStudentSearch(studentSearch.value.trim());
+        const options = Array.from(studentResults.querySelectorAll('.student-result'));
+        let visibleCount = 0;
+        options.forEach(function (option) {
+            const searchable = normalizeStudentSearch(option.dataset.name + ' ' + option.dataset.code + ' ' + option.dataset.email);
+            const matches = query.length >= 1 && searchable.includes(query);
+            option.hidden = !matches;
+            option.setAttribute('aria-selected', 'false');
+            if (matches) visibleCount++;
+        });
+        studentEmpty.hidden = query.length < 1 || visibleCount > 0;
+        studentResults.hidden = query.length < 1;
+        studentSearch.setAttribute('aria-expanded', query.length >= 1 ? 'true' : 'false');
+    });
+    studentSearch.addEventListener('keydown', function (event) {
+        const visibleOptions = Array.from(studentResults.querySelectorAll('.student-result:not([hidden])'));
+        if (event.key === 'ArrowDown' && visibleOptions.length) {
+            event.preventDefault(); visibleOptions[0].focus();
+        } else if (event.key === 'Escape') {
+            closeStudentResults();
+        }
+    });
+    studentResults.addEventListener('keydown', function (event) {
+        const visibleOptions = Array.from(studentResults.querySelectorAll('.student-result:not([hidden])'));
+        const index = visibleOptions.indexOf(document.activeElement);
+        if (event.key === 'ArrowDown' && index < visibleOptions.length - 1) {
+            event.preventDefault(); visibleOptions[index + 1].focus();
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            if (index > 0) visibleOptions[index - 1].focus();
+            else studentSearch.focus();
+        } else if (event.key === 'Escape') {
+            closeStudentResults(); studentSearch.focus();
+        }
+    });
+    studentResults.addEventListener('click', function (event) {
+        const option = event.target.closest('.student-result');
+        if (option) selectStudent(option);
+    });
+    document.getElementById('student-change').addEventListener('click', function () {
+        studentSelect.value = '';
+        studentSelectedCard.hidden = true;
+        studentSearchWrap.hidden = false;
+        studentSearch.required = true;
+        studentSearch.value = '';
+        studentSearch.focus();
+    });
+    document.addEventListener('click', function (event) {
+        if (!event.target.closest('.student-picker')) closeStudentResults();
+    });
 }
 </script>
 

@@ -159,6 +159,17 @@
             if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
             var a = e.target.closest('a');
             if (!sameOriginNav(a)) return;
+            if (a.hasAttribute('data-return')) {
+                var sameSiteReferrer = false;
+                try { sameSiteReferrer = !!document.referrer && new URL(document.referrer).origin === location.origin; } catch (err) {}
+                if (sameSiteReferrer && history.length > 1) {
+                    e.preventDefault();
+                    root.classList.add('t-leave');
+                    var back = function () { history.back(); };
+                    reduce ? back() : setTimeout(back, 190);
+                    return;
+                }
+            }
             e.preventDefault();
             root.classList.add('t-leave');
             var go = function () { location.href = a.href; };

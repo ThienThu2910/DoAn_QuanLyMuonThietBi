@@ -68,7 +68,17 @@ CREATE TABLE IF NOT EXISTS file_metadata (
 -- Dữ liệu ban đầu
 INSERT INTO users (fullname, student_code, email, password, role) VALUES 
 ('Quản trị viên', 'ADMIN01', 'admin@gmail.com', 'admin123', 'admin'),
-('Nguyễn Văn Sinh Viên', 'SV001', 'student@gmail.com', '123456', 'student');
+('Nguyễn Văn Sinh Viên', 'SV001', 'student@gmail.com', '123456', 'student'),
+('Sinh viên thử nghiệm 01', 'SVTEST001', 'student.test01@example.com', '123456', 'student'),
+('Sinh viên thử nghiệm 02', 'SVTEST002', 'student.test02@example.com', '123456', 'student'),
+('Sinh viên thử nghiệm 03', 'SVTEST003', 'student.test03@example.com', '123456', 'student'),
+('Sinh viên thử nghiệm 04', 'SVTEST004', 'student.test04@example.com', '123456', 'student'),
+('Sinh viên thử nghiệm 05', 'SVTEST005', 'student.test05@example.com', '123456', 'student'),
+('Sinh viên thử nghiệm 06', 'SVTEST006', 'student.test06@example.com', '123456', 'student'),
+('Sinh viên thử nghiệm 07', 'SVTEST007', 'student.test07@example.com', '123456', 'student'),
+('Sinh viên thử nghiệm 08', 'SVTEST008', 'student.test08@example.com', '123456', 'student'),
+('Sinh viên thử nghiệm 09', 'SVTEST009', 'student.test09@example.com', '123456', 'student'),
+('Sinh viên thử nghiệm 10', 'SVTEST010', 'student.test10@example.com', '123456', 'student');
 
 INSERT INTO categories (name, description) VALUES 
 ('Máy chiếu & Phụ kiện', 'Thiết bị trình chiếu phòng họp/giảng đường'),

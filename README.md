@@ -41,6 +41,8 @@ Lần đầu MySQL cần khoảng 30–60 giây để khởi tạo. Nếu web b�
 
 **Bước 4 — Đăng nhập** tại http://localhost:8080.
 
+Trang quản lý tài khoản có thêm 10 tài khoản sinh viên thử nghiệm sau khi chạy `/setup.php`. Các tài khoản dùng mật khẩu `123456`, mã từ `SVTEST001` đến `SVTEST010`, email từ `student.test01@example.com` đến `student.test10@example.com`.
+
 ## Địa chỉ và tài khoản
 
 | Dịch vụ | Địa chỉ | Đăng nhập |

@@ -129,7 +129,7 @@ $topStudents = $pdo->query("
                 </thead>
                 <tbody>
                     <?php foreach ($issueDevices as $idv): ?>
-                        <tr>
+                        <tr id="issue-device-<?= (int)$idv['id'] ?>">
                             <td>
                                 <strong><?= htmlspecialchars($idv['name']) ?></strong><br>
                                 <code style="color: #2563EB;"><?= htmlspecialchars($idv['code']) ?></code>
@@ -142,7 +142,7 @@ $topStudents = $pdo->query("
                                 </span>
                             </td>
                             <td>
-                                <a href="/admin/device_edit.php?id=<?= $idv['id'] ?>" style="color: #2563EB; font-weight: 700; text-decoration: none; font-size: 0.85rem;">
+                                <a href="/admin/device_edit.php?id=<?= $idv['id'] ?>&amp;return=<?= urlencode('/admin/reports.php#issue-device-' . (int)$idv['id']) ?>" style="color: #2563EB; font-weight: 700; text-decoration: none; font-size: 0.85rem;">
                                     Sửa / Khắc phục &rarr;
                                 </a>
                             </td>

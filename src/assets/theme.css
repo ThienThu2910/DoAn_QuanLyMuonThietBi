@@ -908,6 +908,13 @@ html[data-theme] .device-bottom {                         /* dải đáy kính, 
     background: rgba(255, 255, 255, .22);
 }
 html[data-theme="dark"] .device-bottom { background: rgba(255, 255, 255, .04); }
+
+/* Thẻ sinh viên đã chọn trên biểu mẫu mượn thiết bị */
+html[data-theme="dark"] .student-selected { background: #14271F; border-color: #315844; }
+html[data-theme="dark"] .student-selected-info strong { color: #F1F6F3; }
+html[data-theme="dark"] .student-selected-info span { color: #B5C8BD; }
+html[data-theme="dark"] .student-selected-icon { background: #204333; color: #7CE0B5; }
+html[data-theme="dark"] .student-change { color: #7CE0B5; }
 .is-list .device-bottom { margin-bottom: -18px; }
 html[data-theme] .btn-borrow {
     border-radius: 14px; background: var(--t-brand-soft); border: 1px solid var(--t-brand-line); color: var(--t-brand-text);

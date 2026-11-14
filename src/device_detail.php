@@ -83,7 +83,7 @@ $borrowTurnCount = $stmtCount->fetchColumn();
 
 <main class="container">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
-        <a href="/index.php" style="color: var(--accent); text-decoration: none; font-weight: 600; font-size: 0.9rem;">
+        <a data-return href="/index.php" style="color: var(--accent); text-decoration: none; font-weight: 600; font-size: 0.9rem;">
             <i class="bi bi-arrow-left"></i> Quay lại kho thiết bị
         </a>
         <?php if ($_SESSION['user']['role'] === 'admin'): ?>
@@ -143,7 +143,8 @@ $borrowTurnCount = $stmtCount->fetchColumn();
             <div style="display: flex; gap: 15px; align-items: center;">
                 <?php if ($device['available_qty'] > 0): ?>
                     <a href="/borrow.php?device_id=<?= $device['id'] ?>" class="btn-borrow-now">
-                        <i class="bi bi-journal-plus me-1"></i> Đăng Ký Mượn Thiết Bị Này
+                        <i class="bi <?= $_SESSION['user']['role'] === 'admin' ? 'bi-person-plus' : 'bi-journal-plus' ?> me-1"></i>
+                        <?= $_SESSION['user']['role'] === 'admin' ? 'Ghi Nhận Bàn Giao Cho Sinh Viên' : 'Đăng Ký Mượn Thiết Bị Này' ?>
                     </a>
                 <?php else: ?>
                     <button class="btn-borrow-now" style="opacity: 0.5; cursor: not-allowed;" disabled>

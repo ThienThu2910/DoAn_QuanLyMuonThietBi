@@ -125,7 +125,7 @@ $diffDays = (int)$today->diff($dueDate)->format("%r%a");
 
 <main class="container">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
-        <a href="<?= $isAdmin ? '/admin/requests.php' : '/my_borrows.php' ?>" style="color: var(--accent); text-decoration: none; font-weight: 600; font-size: 0.9rem;">
+        <a data-return href="<?= $isAdmin ? '/admin/requests.php' : '/my_borrows.php' ?>" style="color: var(--accent); text-decoration: none; font-weight: 600; font-size: 0.9rem;">
             <i class="bi bi-arrow-left"></i> Quay lại danh sách phiếu
         </a>
         <span class="status-pill status-<?= $req['status'] ?>">

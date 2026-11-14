@@ -4,6 +4,10 @@ require_once '../minio_helper.php';
 checkAdmin();
 
 $id = (int)($_GET['id'] ?? 0);
+$returnTo = $_GET['return'] ?? '';
+if (!is_string($returnTo) || !preg_match('~^/admin/(?:devices|reports)\.php(?:#[A-Za-z0-9_-]+)?$~', $returnTo)) {
+    $returnTo = '/admin/devices.php#device-' . $id;
+}
 $stmt = $pdo->prepare("SELECT * FROM devices WHERE id = ?");
 $stmt->execute([$id]);
 $device = $stmt->fetch();
@@ -65,10 +69,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             WHERE id = ?
         ");
         $update->execute([$catId, $code, $name, $quantity, $newAvailable, $location, $status, $desc, $imageKey, $manualKey, $id]);
-        $msg = "Cập nhật thông tin thiết bị thành công!";
-        // Tải lại dữ liệu mới
-        $stmt->execute([$id]);
-        $device = $stmt->fetch();
+        $returnPath = strtok($returnTo, '#');
+        $returnHash = parse_url($returnTo, PHP_URL_FRAGMENT);
+        header("Location: " . $returnPath . "?msg=" . urlencode("Cập nhật thông tin thiết bị thành công!") . ($returnHash ? "#" . $returnHash : ""));
+        exit;
     } catch (Exception $e) {
         $err = "Lỗi cập nhật: " . $e->getMessage();
     }
@@ -111,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <h1 style="font-size: 2rem; font-weight: 800; margin: 0;">Chỉnh Sửa Thiết Bị</h1>
             <p style="color: #64748B; margin: 6px 0 0;">Cập nhật thông số kỹ thuật, vị trí lưu trữ và trạng thái sử dụng</p>
         </div>
-        <a href="/admin/devices.php" style="color: #2563EB; text-decoration: none; font-weight: 700;">&larr; Quay lại danh sách</a>
+        <a data-return href="<?= htmlspecialchars($returnTo, ENT_QUOTES, 'UTF-8') ?>" style="color: #2563EB; text-decoration: none; font-weight: 700;">&larr; Quay lại danh sách</a>
     </div>
 
     <?php if ($msg): ?><div style="padding: 14px 20px; background: #D1FAE5; color: #065F46; border-radius: 14px; margin-bottom: 20px; font-weight: 600;"><?= htmlspecialchars($msg) ?></div><?php endif; ?>

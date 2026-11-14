@@ -11,6 +11,17 @@ try {
     $pdo->exec("UPDATE users SET password = 'admin123' WHERE email = 'admin@gmail.com'");
     $pdo->exec("UPDATE users SET password = '123456' WHERE email = 'student@gmail.com'");
 
+    // Thêm tài khoản sinh viên thử nghiệm mà không tạo trùng khi chạy setup nhiều lần.
+    $seedStudent = $pdo->prepare("INSERT IGNORE INTO users (fullname, student_code, email, password, role) VALUES (?, ?, ?, '123456', 'student')");
+    for ($i = 1; $i <= 10; $i++) {
+        $number = str_pad((string)$i, 2, '0', STR_PAD_LEFT);
+        $seedStudent->execute([
+            "Sinh viên thử nghiệm {$number}",
+            'SVTEST' . str_pad((string)$i, 3, '0', STR_PAD_LEFT),
+            "student.test{$number}@example.com",
+        ]);
+    }
+
     // 1. Bổ sung cột cho bảng devices
     $deviceCols = $pdo->query("SHOW COLUMNS FROM devices")->fetchAll(PDO::FETCH_COLUMN);
     if (!in_array('location', $deviceCols)) {
